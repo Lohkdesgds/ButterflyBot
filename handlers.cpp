@@ -90,22 +90,31 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 	auto links = links_orig;
 	auto files = files_orig;
 
-	aegis::channel* fallback = get_channel_safe(msg.get_channel_id(), core);
+	aegis::channel* fallback = fallback = get_channel_safe(msg.get_channel_id(), core);
+	for (size_t p = 0; p < 7 && !fallback; p++) {
+		fallback = get_channel_safe(msg.get_channel_id(), core);
+		std::this_thread::yield();
+		std::this_thread::sleep_for(std::chrono::milliseconds(500));
+		std::this_thread::yield();
+	}
 
 	unsigned long long
 		chat_link = 0,
 		chat_file = 0;
 		
 	{
-		std::lock_guard<std::mutex> luck(mute);
-		for (auto& i : link_overwrite_contains) {
-			if (msg.get_content().find(i.first) != std::string::npos) {
-				chat_link = i.second;
-				break;
+		if (msg.get_content().find("http") != std::string::npos) {
+
+			std::lock_guard<std::mutex> luck(mute);
+			for (auto& i : link_overwrite_contains) {
+				if (msg.get_content().find(i.first) != std::string::npos) {
+					chat_link = i.second;
+					break;
+				}
 			}
-		}
-		if (!chat_link && msg.get_content().find("http") != std::string::npos) {
-			chat_link = links;
+			if (!chat_link) {
+				chat_link = links;
+			}
 		}
 	}
 	// if chat_link has value, send there.
@@ -197,7 +206,9 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 		std::this_thread::yield();
 		for (size_t tries = 0; tries < 7; tries++) {
 			try {
-				msg.delete_message(); // had link or file, so delete.
+				if (fallback) fallback->delete_message(msg.get_id());
+				else logging.print("[Local] Guild #", this_guild_orig, " can't delete source message.");
+				//msg.delete_message(); // had link or file, so delete.
 			}
 			catch (aegis::error e) {
 				logging.print("[Local][", tries + 1, "/7] Guild #", this_guild_orig, " delete_message couldn't delete message. Got error: ", e);
