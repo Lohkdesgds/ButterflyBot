@@ -15,11 +15,13 @@
     <ClInclude Include="handlers.h" />
     <ClInclude Include="keys.h" />
     <ClInclude Include="printer.h" />
+    <ClInclude Include="slow_flush.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="download\download.cpp" />
     <ClCompile Include="handlers.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="slow_flush.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>

@@ -2,6 +2,7 @@
 
 #include "printer.h"
 #include "download/download.h"
+#include "slow_flush.h"
 
 #include <aegis.hpp>
 #include <thread>
@@ -14,11 +15,6 @@ const unsigned long long mee_dev = 280450898885607425; // myself, for debugging 
 using namespace LSW::v5;
 
 
-bool slow_flush(aegis::create_message_t, aegis::channel&, unsigned long long);
-bool slow_flush(std::string, aegis::channel&, unsigned long long);
-
-bool slow_flush_embed(nlohmann::json, aegis::channel&, unsigned long long);
-bool slow_flush_embed(aegis::gateway::objects::embed, aegis::channel&, unsigned long long);
 
 
 class chat_config {

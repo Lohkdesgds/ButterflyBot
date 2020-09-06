@@ -8,6 +8,9 @@
     <ClCompile Include="handlers.cpp">
       <Filter>Resources</Filter>
     </ClCompile>
+    <ClCompile Include="slow_flush.cpp">
+      <Filter>Resources</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="download\download.h">
@@ -20,6 +23,9 @@
       <Filter>Resources</Filter>
     </ClInclude>
     <ClInclude Include="handlers.h">
+      <Filter>Resources</Filter>
+    </ClInclude>
+    <ClInclude Include="slow_flush.h">
       <Filter>Resources</Filter>
     </ClInclude>
   </ItemGroup>

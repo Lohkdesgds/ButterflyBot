@@ -1,124 +1,5 @@
 #include "handlers.h"
 
-/*custom_message_save::custom_message_save(aegis::gateway::objects::message& m)
-{
-	aegis::gateway::objects::message cpy = m;
-	last_id = m.get_id();
-	last_chat = m.get_channel_id();
-	timestamp = m.timestamp;
-	username = m.author.username;
-	discriminator = m.author.discriminator;
-	content = m.get_content();
-	for (auto& i : m.reactions) {
-		reactions.push_back({ i.emoji_.id != 0 ? ((i.emoji_.animated ? u8"<a:" : u8"<:") + i.emoji_.name + u8":" + std::to_string(i.emoji_.id) + u8">") : i.emoji_.name, i.count });
-	}
-	for (auto& i : m.embeds) {
-		nlohmann::json jss;
-		aegis::gateway::objects::to_json(jss, i);
-		embeds_json.push_back(jss.dump());
-	}
-	for (auto& i : m.attachments) {
-		attachments.push_back({ i.url, i.filename });
-	}
-}*/
-
-
-
-
-bool slow_flush(aegis::create_message_t m, aegis::channel& ch, unsigned long long this_guild_orig) {
-	std::this_thread::yield();
-	if (m._content.empty()) return false;
-	for (size_t tries = 0; tries < 7; tries++) {
-		try {
-			for (size_t p = 0; p < 4; p++) std::this_thread::yield();
-			ch.create_message(m).get();
-			/*std::this_thread::sleep_for(std::chrono::milliseconds(800));
-			for (size_t p = 0; p < 4; p++) std::this_thread::yield();*/
-			return true;
-		}
-		catch (aegis::error e) {
-			logging.print("[Local][", tries + 1, "/7] Guild #", this_guild_orig, " SlowFlush couldn't send message. Got error: ", e);
-			std::this_thread::sleep_for(std::chrono::milliseconds(500));
-			for (size_t p = 0; p < 4; p++) std::this_thread::yield();
-		}
-		catch (std::exception e) {
-			logging.print("[Local][", tries + 1, "/7] Guild #", this_guild_orig, " SlowFlush couldn't send message. Got error: ", e);
-			std::this_thread::sleep_for(std::chrono::milliseconds(500));
-			for (size_t p = 0; p < 4; p++) std::this_thread::yield();
-		}
-		catch (...) {
-			logging.print("[Local][", tries + 1, "/7] Guild #", this_guild_orig, " SlowFlush couldn't send message. Unknown error.");
-			std::this_thread::sleep_for(std::chrono::milliseconds(500));
-			for (size_t p = 0; p < 4; p++) std::this_thread::yield();
-		}
-	}
-	return false;
-}
-
-bool slow_flush(std::string str, aegis::channel& ch, unsigned long long this_guild_orig) {
-	return slow_flush(aegis::create_message_t().content(str), ch, this_guild_orig);
-}
-
-bool slow_flush_embed(nlohmann::json emb, aegis::channel& ch, unsigned long long this_guild_orig) {
-	if (emb.empty()) return false;
-	std::this_thread::yield();
-	for (size_t tries = 0; tries < 7; tries++) {
-		try {
-			for (size_t p = 0; p < 4; p++) std::this_thread::yield();
-			ch.create_message_embed({}, emb).get();
-			/*std::this_thread::sleep_for(std::chrono::milliseconds(800));
-			for (size_t p = 0; p < 4; p++) std::this_thread::yield();*/
-			return true;
-		}
-		catch (aegis::error e) {
-			logging.print("[Local][", tries + 1, "/7] Guild #", this_guild_orig, " SlowFlushEmbed couldn't send message. Got error: ", e);
-			std::this_thread::sleep_for(std::chrono::milliseconds(500));
-			for (size_t p = 0; p < 4; p++) std::this_thread::yield();
-		}
-		catch (std::exception e) {
-			logging.print("[Local][", tries + 1, "/7] Guild #", this_guild_orig, " SlowFlushEmbed couldn't send message. Got error: ", e);
-			std::this_thread::sleep_for(std::chrono::milliseconds(500));
-			for (size_t p = 0; p < 4; p++) std::this_thread::yield();
-		}
-		catch (...) {
-			logging.print("[Local][", tries + 1, "/7] Guild #", this_guild_orig, " SlowFlushEmbed couldn't send message. Unknown error.");
-			std::this_thread::sleep_for(std::chrono::milliseconds(500));
-			for (size_t p = 0; p < 4; p++) std::this_thread::yield();
-		}
-	}
-	return false;
-}
-
-bool slow_flush_embed(aegis::gateway::objects::embed emb, aegis::channel& ch, unsigned long long this_guild_orig) {
-	std::this_thread::yield();
-	for (size_t tries = 0; tries < 7; tries++) {
-		try {
-			for (size_t p = 0; p < 4; p++) std::this_thread::yield();
-			ch.create_message_embed({}, emb).get();
-			/*std::this_thread::sleep_for(std::chrono::milliseconds(800));
-			for (size_t p = 0; p < 4; p++) std::this_thread::yield();*/
-			return true;
-		}
-		catch (aegis::error e) {
-			logging.print("[Local][", tries + 1, "/7] Guild #", this_guild_orig, " SlowFlushEmbed couldn't send message. Got error: ", e);
-			std::this_thread::sleep_for(std::chrono::milliseconds(500));
-			for (size_t p = 0; p < 4; p++) std::this_thread::yield();
-		}
-		catch (std::exception e) {
-			logging.print("[Local][", tries + 1, "/7] Guild #", this_guild_orig, " SlowFlushEmbed couldn't send message. Got error: ", e);
-			std::this_thread::sleep_for(std::chrono::milliseconds(500));
-			for (size_t p = 0; p < 4; p++) std::this_thread::yield();
-		}
-		catch (...) {
-			logging.print("[Local][", tries + 1, "/7] Guild #", this_guild_orig, " SlowFlushEmbed couldn't send message. Unknown error.");
-			std::this_thread::sleep_for(std::chrono::milliseconds(500));
-			for (size_t p = 0; p < 4; p++) std::this_thread::yield();
-		}
-	}
-	return false;
-}
-
-
 
 aegis::channel* chat_config::get_channel_safe(unsigned long long ch, std::shared_ptr<aegis::core>& bot) const
 {
@@ -296,13 +177,10 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 			}
 			else {
 				if (slow_flush(to_send, *ch, this_guild)) {
-					aegis::create_message_t msg2;
 					aegis::rest::aegis_file fp;
 					fp.name = i.filename;
 					for (auto& k : down.read()) fp.data.push_back(k);
-					msg2.file(fp);
-
-					if (slow_flush(msg2, *ch, this_guild)) failure = 0;
+					if (slow_flush(fp, *ch, this_guild)) failure = 0;
 				}
 			}
 		}
