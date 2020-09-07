@@ -2,7 +2,7 @@
 
 #include <aegis.hpp>
 
-#define LSW_NO_WAIT
+///#define LSW_NO_WAIT
 
 bool slow_flush(aegis::create_message_t, aegis::channel&, unsigned long long, std::shared_ptr<spdlog::logger>);
 bool slow_flush(aegis::rest::aegis_file, aegis::channel&, unsigned long long, std::shared_ptr<spdlog::logger>);

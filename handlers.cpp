@@ -56,6 +56,9 @@ void chat_config::load(nlohmann::json j, unsigned long long guild)
 	if (j.count("files") && !j["files"].is_null())
 		files_orig = j["files"].get<unsigned long long>();
 
+	if (j.count("not_link_or_file") && !j["not_link_or_file"].is_null())
+		not_link_or_file_orig = j["not_link_or_file"].get<unsigned long long>();
+
 	if (j.count("link_overwrite_contains") && !j["link_overwrite_contains"].is_null()) {
 		for (const auto& _field : j["link_overwrite_contains"])
 			link_overwrite_contains.push_back(_field);
@@ -63,6 +66,10 @@ void chat_config::load(nlohmann::json j, unsigned long long guild)
 	if (j.count("files_overwrite_contains") && !j["files_overwrite_contains"].is_null()) {
 		for (const auto& _field : j["files_overwrite_contains"])
 			files_overwrite_contains.push_back(_field);
+	}
+	if (j.count("not_link_or_file_overwrite_contains") && !j["not_link_or_file_overwrite_contains"].is_null()) {
+		for (const auto& _field : j["not_link_or_file_overwrite_contains"])
+			not_link_or_file_overwrite_contains.push_back(_field);
 	}
 }
 
@@ -72,11 +79,14 @@ nlohmann::json chat_config::export_config()
 
 	j["links"] = links_orig;
 	j["files"] = files_orig;
+	j["not_link_or_file"] = not_link_or_file_orig;
 
 	for (const auto& _field : link_overwrite_contains)
 		j["link_overwrite_contains"].push_back(_field);
 	for (const auto& _field : files_overwrite_contains)
 		j["files_overwrite_contains"].push_back(_field);
+	for (const auto& _field : not_link_or_file_overwrite_contains)
+		j["not_link_or_file_overwrite_contains"].push_back(_field);
 
 	return j;
 }
@@ -85,9 +95,10 @@ chat_config& chat_config::operator=(const chat_config& cc)
 {
 	this_guild_orig = cc.this_guild_orig;
 	links_orig = cc.links_orig;
-	files_orig = cc.files_orig;
+	not_link_or_file_orig = cc.not_link_or_file_orig;
 	for (auto& i : cc.link_overwrite_contains) link_overwrite_contains.push_back(i);
 	for (auto& i : cc.files_overwrite_contains) files_overwrite_contains.push_back(i);
+	for (auto& i : cc.not_link_or_file_overwrite_contains) not_link_or_file_overwrite_contains.push_back(i);
 
 	return *this;
 }
@@ -100,6 +111,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 	auto this_guild = this_guild_orig;
 	auto links = links_orig;
 	auto files = files_orig;
+	auto nonee = not_link_or_file_orig;
 
 	aegis::channel* fallback = fallback = get_channel_safe(msg.get_channel_id(), core);
 	for (size_t p = 0; p < 7 && !fallback; p++) {
@@ -111,8 +123,17 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 
 	unsigned long long
 		chat_link = 0,
-		chat_file = 0;
+		chat_file = 0,
+		chat_none = 0;
+
+	/*
+	IF value is 0			=> NOT FOUND
+	ELSE IF value is 1		=> ERASE ONLY
+	ELSE					=> COPY
+	*/
+
 		
+	// >> LINK
 	{
 		if (msg.get_content().find("http") != std::string::npos) {
 
@@ -128,9 +149,8 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 			}
 		}
 	}
-	// if chat_link has value, send there.
 
-
+	// >> FILE
 	if (msg.attachments.size() > 0) {
 		auto& at = msg.attachments[0];
 		std::lock_guard<std::mutex> luck(mute);
@@ -152,10 +172,24 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 			chat_file = files;
 		}
 	}
-	// if chat_file has value, there is file. Allow only one tho. Better.
+
+	if (!chat_link && !chat_file) {
+		for (auto& i : not_link_or_file_overwrite_contains) {
+			if (msg.get_content().find(i.first) != std::string::npos) {
+				chat_none = i.second;
+				break;
+			}
+		}
+		if (!chat_none) {
+			chat_none = nonee;
+		}
+	}
 
 
-	if (chat_link) { // has link, share link in links section (might have file)
+
+
+
+	if (chat_link > 1) { // has link, share link in links section (might have file)				<< LINKS
 		aegis::channel* ch = get_channel_safe(chat_link, core);
 		bool failure = true;
 		
@@ -169,7 +203,8 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 			slow_flush("Failed to move your message.", *fallback, this_guild, logg);
 		}
 	}
-	if (chat_file) { // has file, share file in files section (might have link)
+
+	if (chat_file > 1) { // has file, share file in files section (might have link)				<< FILES
 		aegis::channel* ch = get_channel_safe(chat_file, core);
 		int failure = 1;
 
@@ -209,11 +244,28 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 			slow_flush("Failed to move your file." + std::string(failure == 2 ? " File too big." : ""), *fallback, this_guild, logg);
 		}
 	}
-	/*if (!chat_link && !chat_file) { // if there's no file and link...
-	  // maybe later a autocopy?
-	}*/
 
-	if (chat_link || chat_file) {
+	if (chat_link == 0 && chat_file == 0 && chat_none > 1) { // not link and no file, DEFAULT chat_none				<< NONES || just_delete_source
+
+		if (msg.get_content().length()) {
+			aegis::channel* ch = get_channel_safe(chat_none, core);
+			bool failure = true;
+
+			if (ch) {
+				std::string to_send = "`" + msg.author.username + "#" + msg.author.discriminator + ":` " + msg.get_content();
+				if (to_send.length() > 2000) to_send = to_send.substr(0, 2000);
+
+				if (slow_flush(to_send, *ch, this_guild, logg)) failure = false;
+			}
+			if (failure && fallback) {
+				slow_flush("Failed to move your message.", *fallback, this_guild, logg);
+			}
+		}
+	}
+
+
+
+	if (chat_link || chat_file || chat_none) {
 		std::this_thread::yield();
 		for (size_t tries = 0; tries < 7; tries++) {
 			try {
@@ -265,18 +317,22 @@ void GuildHandle::command(std::vector<std::string> args, aegis::channel& buck)
 	auto common_help = [&] {
 		std::string msg =
 			"**Commands:**\n\n"
-			"Global:\n"
+			"```md\n"
+			"# Global:\n"
 			"- debug - shows all config (in json)\n"
-			"- alias <command alias> - add an alias, like ~\n"
+			"- alias <command_alias> - add an alias, like ~\n"
 			"- admintag add/remove <id> - allow or not a tag to run these commands\n"
-			"Local:\n"
+			"# Local:\n"
+			"- delallconfig - removes ALL configuration in this chat\n"
 			"- link <id> - set default link redirect\n"
 			"- file <id> - set default file redirect\n"
-			"- specific link <contains> <id> - set if link has <contains> redirect to <id>\n"
-			"- specific file <contains> <id> - set if file has <contains> in its name redirect to <id>\n"
-			"- specific remove \\* \\* - removes ALL specific rules (yes, two \\* \\*, one means any entry, second means any in those entries)\n"
-			"- specific remove link <contains> - remove a setting set earlier (pro tip: * clear everything)\n"
-			"- specific remove file <contains> - remove a setting set earlier (pro tip: * clear everything)\n";
+			"- text <id> - set default text redirect (if not file nor link)\n"
+			"- specific link <contains> <id> - if link has <contains>, redirect to <id> (if <id> is 0, it will only delete the source)\n"
+			"- specific file <contains> <id> - if file has <contains>, redirect to <id> (if <id> is 0, it will only delete the source)\n"
+			"- specific text <contains> <id> - if text has <contains>, redirect to <id> (not file/link only) (if <id> is 0, it will only delete the source)\n"
+			"- specific remove * * - removes ALL specific rules (yes, two * *, one means any entry, second means any in those entries)\n"
+			"- specific remove link <contains> - remove a rule set earlier (pro tip: * clear everything)\n"
+			"- specific remove file <contains> - remove a rule set earlier (pro tip: * clear everything)\n```";
 
 		slow_flush(msg, buck, guildid, logg);
 	};
@@ -304,9 +360,40 @@ void GuildHandle::command(std::vector<std::string> args, aegis::channel& buck)
 
 			well_done = true;
 		}
+		else if (yo == "delallconfig") {
+			std::string sending;
+			{
+				std::lock_guard<std::mutex> luck_me(data.mut);
+				auto ch_id = buck.get_id();
+
+				
+				for (auto it = data.chats.begin(); it != data.chats.end(); it++) {
+					if ((*it).first == ch_id) {
+						data.chats.erase(it);
+						break;
+					}
+				}
+
+				/*auto& friendo = data.chats[ch_id];
+				std::lock_guard<std::mutex> luck(friendo.mute);
+
+				friendo.link_overwrite_contains.clear();
+				friendo.files_overwrite_contains.clear();
+				friendo.not_link_or_file_overwrite_contains.clear();
+				friendo.links_orig = 0;
+				friendo.files_orig = 0;
+				friendo.not_link_or_file_orig = 0;*/
+
+				sending = "Cleaned up ALL rulesets and default rules of this chat.";
+				save = true;
+			}
+			if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
+
+			well_done = true;
+		}
 	}
 		break;
-	case 3: // <cmd> { alias, link, file } <id>
+	case 3: // <cmd> { alias, link, file, text } <id>
 	{
 		auto& yo = args[1];
 		auto& res = args[2];
@@ -339,8 +426,41 @@ void GuildHandle::command(std::vector<std::string> args, aegis::channel& buck)
 				unsigned long long yaoo;
 				
 				if (sscanf_s(res.c_str(), "%llu", &yaoo) == 1) {
-					friendo.links_orig = yaoo;
-					sending = "Has set <#" + std::to_string(yaoo) + "> as global link fallback successfully.";
+					friendo.links_orig = yaoo ? yaoo : 1;
+					if (yaoo) sending = "Has set <#" + std::to_string(yaoo) + "> as global link fallback successfully.";
+					else sending = "Has set to just delete as global link fallback successfully.";
+					save = true;
+				}
+				else {
+					sending = "Failed to get the ID from your command.";
+				}
+			}			
+			if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
+
+			well_done = true;
+		}
+		else if (yo == "text") { // 																			<< lsw/bb text <id>
+
+			std::string sending;
+			{
+				std::lock_guard<std::mutex> luck_me(data.mut);
+				auto ch_id = buck.get_id();
+				auto& friendo = data.chats[ch_id];
+				std::lock_guard<std::mutex> luck(friendo.mute);
+
+				while (res.length() > 0) {
+					if (!std::isdigit(res[0])) { // not a number
+						res.erase(res.begin());
+					}
+					else break;
+				}
+
+				unsigned long long yaoo;
+				
+				if (sscanf_s(res.c_str(), "%llu", &yaoo) == 1) {
+					friendo.not_link_or_file_orig = yaoo ? yaoo : 1;
+					if (yaoo) sending = "Has set <#" + std::to_string(yaoo) + "> as global text fallback successfully.";
+					else sending = "Has set to just delete as global text fallback successfully.";
 					save = true;
 				}
 				else {
@@ -370,8 +490,9 @@ void GuildHandle::command(std::vector<std::string> args, aegis::channel& buck)
 				unsigned long long yaoo;
 				
 				if (sscanf_s(res.c_str(), "%llu", &yaoo) == 1) {
-					friendo.files_orig = yaoo;
-					sending = "Has set <#" + std::to_string(yaoo) + "> as global file fallback successfully.";
+					friendo.files_orig = yaoo ? yaoo : 1;
+					if (yaoo) sending = "Has set <#" + std::to_string(yaoo) + "> as global file fallback successfully.";
+					else sending = "Has set to just delete as global file fallback successfully.";
 					save = true;
 				}
 				else {
@@ -480,7 +601,7 @@ void GuildHandle::command(std::vector<std::string> args, aegis::channel& buck)
 		}
 	}
 		break;
-	case 5: // <cmd> { specific [link|file <contains> <id>] | [specific remove link|file <contains>] } 
+	case 5: // <cmd> { specific [link|file|text <contains> <id>] | [specific remove link|file|text <contains>] } 
 	{
 		auto& yo = args[1];
 		auto& yo2 = args[2];
@@ -489,7 +610,6 @@ void GuildHandle::command(std::vector<std::string> args, aegis::channel& buck)
 
 		if (yo == "specific") {
 			if (yo2 == "link" && yo3 != "*") {
-
 
 				std::string sending;
 				{
@@ -513,15 +633,60 @@ void GuildHandle::command(std::vector<std::string> args, aegis::channel& buck)
 
 						for (auto& h : friendo.link_overwrite_contains) {
 							if (h.first == yo3) {
-								h.second = yaoo;
+								h.second = yaoo ? yaoo : 1;
 								already_got = true;
 								break;
 							}
 						}
 
-						if (!already_got) friendo.link_overwrite_contains.push_back({ yo3, yaoo });
+						if (!already_got) friendo.link_overwrite_contains.push_back({ yo3, yaoo ? yaoo : 1 });
 
-						sending = "Added/updated ruleset (link) \"" + yo3 + "\" -> <#" + std::to_string(yaoo) + "> successfully";
+						if (yaoo) sending = "Added/updated ruleset (link) \"" + yo3 + "\" -> <#" + std::to_string(yaoo) + "> successfully";
+						else sending = "Added/updated ruleset (link) \"" + yo3 + "\" -> DELETE successfully";
+						save = true;
+					}
+					else {
+						sending = "Failed to get the ID from your command.";
+					}
+				}
+				if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
+
+				well_done = true;
+			}
+			else if (yo2 == "text" && yo3 != "*") {
+
+				std::string sending;
+				{
+					std::lock_guard<std::mutex> luck_me(data.mut);
+					auto ch_id = buck.get_id();
+					auto& friendo = data.chats[ch_id];
+					std::lock_guard<std::mutex> luck(friendo.mute);
+
+					while (res.length() > 0) {
+						if (!std::isdigit(res[0])) { // not a number
+							res.erase(res.begin());
+						}
+						else break;
+					}
+
+					unsigned long long yaoo;
+					
+					if (sscanf_s(res.c_str(), "%llu", &yaoo) == 1) {
+
+						bool already_got = false;
+
+						for (auto& h : friendo.not_link_or_file_overwrite_contains) {
+							if (h.first == yo3) {
+								h.second = yaoo ? yaoo : 1;
+								already_got = true;
+								break;
+							}
+						}
+
+						if (!already_got) friendo.not_link_or_file_overwrite_contains.push_back({ yo3, yaoo ? yaoo : 1 });
+
+						if (yaoo) sending = "Added/updated ruleset (text) \"" + yo3 + "\" -> <#" + std::to_string(yaoo) + "> successfully";
+						else sending = "Added/updated ruleset (text) \"" + yo3 + "\" -> DELETE successfully";
 						save = true;
 					}
 					else {
@@ -533,7 +698,6 @@ void GuildHandle::command(std::vector<std::string> args, aegis::channel& buck)
 				well_done = true;
 			}
 			else if (yo2 == "file" && yo3 != "*") {
-
 
 				std::string sending;
 				{
@@ -557,15 +721,16 @@ void GuildHandle::command(std::vector<std::string> args, aegis::channel& buck)
 
 						for (auto& h : friendo.files_overwrite_contains) {
 							if (h.first == yo3) {
-								h.second = yaoo;
+								h.second = yaoo ? yaoo : 1;
 								already_got = true;
 								break;
 							}
 						}
 
-						if (!already_got) friendo.files_overwrite_contains.push_back({ yo3, yaoo });
+						if (!already_got) friendo.files_overwrite_contains.push_back({ yo3, yaoo ? yaoo : 1 });
 
-						sending = "Added/updated ruleset (file) \"" + yo3 + "\" -> <#" + std::to_string(yaoo) + "> successfully";
+						if (yaoo) sending = "Added/updated ruleset (file) \"" + yo3 + "\" -> <#" + std::to_string(yaoo) + "> successfully";
+						else sending = "Added/updated ruleset (file) \"" + yo3 + "\" -> DELETE successfully";
 						save = true;
 					}
 					else {
@@ -580,7 +745,6 @@ void GuildHandle::command(std::vector<std::string> args, aegis::channel& buck)
 
 				if (yo3 == "*" && res == "*") {
 
-
 					std::string sending;
 					{
 						std::lock_guard<std::mutex> luck_me(data.mut);
@@ -590,6 +754,7 @@ void GuildHandle::command(std::vector<std::string> args, aegis::channel& buck)
 
 						friendo.link_overwrite_contains.clear();
 						friendo.files_overwrite_contains.clear();
+						friendo.not_link_or_file_overwrite_contains.clear();
 
 						sending = "Cleaned up ALL rulesets of this chat.";
 						save = true;
@@ -631,6 +796,46 @@ void GuildHandle::command(std::vector<std::string> args, aegis::channel& buck)
 							}
 							else {
 								sending = "Can't find any ruleset (link) with key \"" + res + "\".";
+							}
+						}
+					}
+					if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
+
+					well_done = true;
+				}
+				else if (yo3 == "text") {
+
+					std::string sending;
+					{
+						std::lock_guard<std::mutex> luck_me(data.mut);
+						auto ch_id = buck.get_id();
+						auto& friendo = data.chats[ch_id];
+						std::lock_guard<std::mutex> luck(friendo.mute);
+
+						if (res == "*") {
+							friendo.not_link_or_file_overwrite_contains.clear();
+
+							sending = "Cleaned up ALL TEXT rulesets of this chat.";
+							save = true;
+						}
+						else { // contains
+
+							bool found = false;
+
+							for (size_t p = 0; p < friendo.not_link_or_file_overwrite_contains.size(); p++) {
+								if (friendo.not_link_or_file_overwrite_contains[p].first == res) {
+									friendo.not_link_or_file_overwrite_contains.erase(friendo.not_link_or_file_overwrite_contains.begin() + p);
+									found = true;
+									break;
+								}
+							}
+
+							if (found) {
+								sending = "Removed ruleset (text) with key \"" + res + "\" successfully.";
+								save = true;
+							}
+							else {
+								sending = "Can't find any ruleset (text) with key \"" + res + "\".";
 							}
 						}
 					}

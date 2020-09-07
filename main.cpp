@@ -1,6 +1,6 @@
 ﻿#include "shared.h"
 
-const std::string version = "V1.2";
+const std::string version = "V1.3.0.1";
 
 void nolock(std::function<void(void)> f, std::string wher = "") {
 	std::string err_line = "[FATAL-ERROR] NoLock failed" + (wher.length() > 0 ? (" at " + wher) : "") + ":";

@@ -24,6 +24,8 @@ public:
 	std::vector<std::pair<std::string, unsigned long long>> link_overwrite_contains;
 	unsigned long long files_orig = 0;
 	std::vector<std::pair<std::string, unsigned long long>> files_overwrite_contains;
+	unsigned long long not_link_or_file_orig = 0;
+	std::vector<std::pair<std::string, unsigned long long>> not_link_or_file_overwrite_contains;
 	mutable std::mutex mute;
 
 	chat_config() = default;
