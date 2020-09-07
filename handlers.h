@@ -4,6 +4,7 @@
 
 #include <aegis.hpp>
 #include <thread>
+#include <regex>
 
 #define MAX_FILE_SIZE 8e6
 
@@ -12,6 +13,8 @@ const unsigned long long mee_dev = 280450898885607425; // myself, for debugging 
 
 using namespace LSW::v5;
 
+
+const std::regex regex_link("http(?:s?)://([\\w_-]+(?:(?:\\.[\\w_-]+)+))([\\w.,@?^=%&:/~+#-]*[\\w@?^=%&/~+#-])?");
 
 
 

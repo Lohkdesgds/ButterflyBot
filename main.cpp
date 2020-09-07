@@ -1,6 +1,6 @@
 ﻿#include "shared.h"
 
-const std::string version = "V1.3.0.1";
+const std::string version = "V1.3.1";
 
 void nolock(std::function<void(void)> f, std::string wher = "") {
 	std::string err_line = "[FATAL-ERROR] NoLock failed" + (wher.length() > 0 ? (" at " + wher) : "") + ":";
@@ -88,7 +88,7 @@ int main()
 	thebot->set_on_message_update([&](aegis::gateway::events::message_update obj) {
 		if (ignore_all_ending_lmao) return;
 		nolock([&] {
-
+			if (obj.msg.get_content().empty()) return;
 			if (obj.msg.author.is_bot()) return;
 
 			std::lock_guard<std::mutex> luck(guilds_m);

@@ -135,7 +135,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 		
 	// >> LINK
 	{
-		if (msg.get_content().find("http") != std::string::npos) {
+		if (std::regex_search(msg.get_content(), regex_link)) {
 
 			std::lock_guard<std::mutex> luck(mute);
 			for (auto& i : link_overwrite_contains) {
