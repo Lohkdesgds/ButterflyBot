@@ -1,10 +1,6 @@
-﻿#define WIN32_LEAN_AND_MEAN
-#include "keys.h"
-#include "printer.h"
-#include "handlers.h"
-#include <aegis.hpp>
+﻿#include "shared.h"
 
-const std::string version = "V1.1.2";
+const std::string version = "V1.2";
 
 void nolock(std::function<void(void)> f, std::string wher = "") {
 	std::string err_line = "[FATAL-ERROR] NoLock failed" + (wher.length() > 0 ? (" at " + wher) : "") + ":";
@@ -12,30 +8,29 @@ void nolock(std::function<void(void)> f, std::string wher = "") {
 		f();
 	}
 	catch (aegis::error e) {
-		logging.print(err_line, e);
+		std::cout << err_line << e << std::endl;
 	}
 	catch (std::exception e) {
-		logging.print(err_line, e);
+		std::cout << err_line << e.what() << std::endl;
 	}
 	catch (...) {
-		logging.print(err_line);
+		std::cout << err_line << std::endl;
 	}
 }
 
 int main()
 {
-	logging.print("[!] Starting bot...");
-
 	std::vector<std::unique_ptr<GuildHandle>> guilds;
 	std::mutex guilds_m;
 	bool ignore_all_ending_lmao = false;
 
-	std::shared_ptr<aegis::core> thebot;
-
-	thebot = std::shared_ptr<aegis::core>(new aegis::core(aegis::create_bot_t().log_level(spdlog::level::trace).token(token)), [](aegis::core* c) {
+	std::shared_ptr<aegis::core> thebot = std::shared_ptr<aegis::core>(new aegis::core(aegis::create_bot_t().log_level(spdlog::level::trace).token(token)), [](aegis::core* c) {
 		c->shutdown();
 		delete c;
 		});
+
+	std::shared_ptr<spdlog::logger> logg = thebot->log;
+	logg->info("[!] Bot has started.");
 
 
 	// join in guild
@@ -43,7 +38,7 @@ int main()
 		if (ignore_all_ending_lmao) return;
 		nolock([&] {
 
-			logging.print("[!] Joined/Connected Guild ", obj.guild.name, " #", obj.guild.id, " (", obj.guild.name, ") from ", obj.guild.region);
+			logg->info("[!] Joined/Connected Guild #{} ({}) from {}", obj.guild.id, obj.guild.name, obj.guild.region);
 
 			std::lock_guard<std::mutex> luck(guilds_m);
 			guilds.emplace_back(std::make_unique<GuildHandle>(thebot, obj.guild.id));
@@ -55,7 +50,7 @@ int main()
 	thebot->set_on_guild_delete([&](aegis::gateway::events::guild_delete obj) {
 		if (ignore_all_ending_lmao) return;
 		nolock([&] {
-			logging.print("[!] Left Guild #", obj.guild_id);
+			logg->info("[!] Left Guild #{}", obj.guild_id);
 
 			std::lock_guard<std::mutex> luck(guilds_m);
 			for (size_t p = 0; p < guilds.size(); p++) {
@@ -82,7 +77,7 @@ int main()
 				}
 			}
 
-			logging.print("[!] Got new message from unknown source?! Creating Guild #", obj.msg.get_guild_id(), "...");
+			logg->info("[!] Got new message from unknown source?! Creating Guild #{}...", obj.msg.get_guild_id());
 
 			guilds.emplace_back(std::make_unique<GuildHandle>(thebot, obj.msg.get_guild_id()));
 
@@ -104,7 +99,7 @@ int main()
 				}
 			}
 
-			logging.print("[!] Got message edit from unknown source?! Creating Guild #", obj.msg.get_guild_id(), "...");
+			logg->info("[!] Got new message from unknown source?! Creating Guild #{}...", obj.msg.get_guild_id());
 
 			guilds.emplace_back(std::make_unique<GuildHandle>(thebot, obj.msg.get_guild_id()));
 
@@ -140,6 +135,8 @@ int main()
 
 	std::string smth;
 	while (smth != "exit") std::cin >> smth;
+	logg->info("[!] Bot is shutting down...");
+
 	ignore_all_ending_lmao = true;
 
 	thebot->shutdown();
@@ -155,7 +152,7 @@ int main()
 	if (here_lol.joinable()) here_lol.join();
 	thebot.reset();
 
-	logging.print("[!] Ended bot entirely.");
+	std::cout << "[!] Ended bot entirely." << std::endl;
 
 	return 0;
 }

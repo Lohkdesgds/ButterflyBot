@@ -1,28 +1,37 @@
 #include "handlers.h"
 
-
 aegis::channel* chat_config::get_channel_safe(unsigned long long ch, std::shared_ptr<aegis::core>& bot) const
 {
+	std::shared_ptr<spdlog::logger> logg = bot->log;
 	std::this_thread::yield();
 	for (size_t tries = 0; tries < 10; tries++) {
 		try {
 			if (aegis::channel* found = bot->channel_create(ch); found) return found;
 			else {
-				logging.print("[", tries + 1, "/10] Guild #", this_guild_orig, " is having trouble while trying to find channel #", ch, ".");
+				logg->error("[!][{}/10] Guild #{} is having trouble while trying to find channel #{}.", tries + 1, this_guild_orig, ch);
 				std::this_thread::yield();
 				std::this_thread::sleep_for(std::chrono::seconds(2));
 				std::this_thread::yield();
 			}
 		}
 		catch (aegis::error e) {
-			logging.print("[!] Got exception at Guild #", this_guild_orig, ": ", e);
-			logging.print("[", tries + 1, "/10] Guild #", this_guild_orig, " trying to find channel #", ch, " again in 5 seconds.");
+			logg->error("[!] Exception at Guild #{}: {}.", this_guild_orig, e);
+			logg->warn("[!][{}/10] Guild #{} will try to find channel #{} again in 5 second.", tries + 1, this_guild_orig, ch);
+
+			std::this_thread::yield();
+			std::this_thread::sleep_for(std::chrono::seconds(5));
+			std::this_thread::yield();
+		}
+		catch (std::exception e) {
+			logg->error("[!] Exception at Guild #{}: {}.", this_guild_orig, e.what());
+			logg->warn("[!][{}/10] Guild #{} will try to find channel #{} again in 5 second.", tries + 1, this_guild_orig, ch);
+
 			std::this_thread::yield();
 			std::this_thread::sleep_for(std::chrono::seconds(5));
 			std::this_thread::yield();
 		}
 	}
-	logging.print("[!] Guild #", this_guild_orig, " couldn't find channel #", ch, ".");
+	logg->error("[!] Guild #{} couldn't find channel #{}.", this_guild_orig, ch);
 	std::this_thread::yield();
 	std::this_thread::sleep_for(std::chrono::seconds(1));
 	std::this_thread::yield();
@@ -86,6 +95,8 @@ chat_config& chat_config::operator=(const chat_config& cc)
 void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gateway::objects::message msg) const
 {
 	// copy
+	std::shared_ptr<spdlog::logger> logg = core->log;
+
 	auto this_guild = this_guild_orig;
 	auto links = links_orig;
 	auto files = files_orig;
@@ -152,10 +163,10 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 			std::string to_send = "`" + msg.author.username + "#" + msg.author.discriminator + ":` " + msg.get_content();
 			if (to_send.length() > 2000) to_send = to_send.substr(0, 2000);
 
-			if (slow_flush(to_send, *ch, this_guild)) failure = false;
+			if (slow_flush(to_send, *ch, this_guild, logg)) failure = false;
 		}
 		if (failure && fallback) {
-			slow_flush("Failed to move your message.", *fallback, this_guild);
+			slow_flush("Failed to move your message.", *fallback, this_guild, logg);
 		}
 	}
 	if (chat_file) { // has file, share file in files section (might have link)
@@ -172,30 +183,30 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 			Downloader down;
 			down.getASync(i.url.c_str());
 
-			logging.print("[!] Guild #", this_guild_orig, " is downloading ", i.filename, "...");
+			logg->info("[!] Guild #{} is downloading {}...", this_guild, i.filename);
 
 			while (!down.ended()) {
 				std::this_thread::yield();
 				std::this_thread::sleep_for(std::chrono::milliseconds(200));
 			}
 
-			logging.print("[!] Guild #", this_guild_orig, " downloaded ", i.filename, ". (size: ", down.read().size(), " byte(s))");
+			logg->info("[!] Guild #{} downloaded {}. (size: {} byte(s))", this_guild, i.filename, down.read().size());
 
 			if (down.read().size() >= MAX_FILE_SIZE) {
 				failure = 2;
 			}
 			else {
-				if (slow_flush(to_send, *ch, this_guild)) {
+				if (slow_flush(to_send, *ch, this_guild, logg)) {
 					aegis::rest::aegis_file fp;
 					fp.name = i.filename;
 					for (auto& k : down.read()) fp.data.push_back(k);
-					if (slow_flush(fp, *ch, this_guild)) failure = 0;
+					if (slow_flush(fp, *ch, this_guild, logg)) failure = 0;
 				}
 			}
 		}
 
 		if (failure && fallback) {
-			slow_flush("Failed to move your file." + std::string(failure == 2 ? " File too big." : ""), *fallback, this_guild);
+			slow_flush("Failed to move your file." + std::string(failure == 2 ? " File too big." : ""), *fallback, this_guild, logg);
 		}
 	}
 	/*if (!chat_link && !chat_file) { // if there's no file and link...
@@ -207,21 +218,22 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 		for (size_t tries = 0; tries < 7; tries++) {
 			try {
 				if (fallback) fallback->delete_message(msg.get_id());
-				else logging.print("[Local] Guild #", this_guild_orig, " can't delete source message.");
+				else logg->error("[!] Guild #{} can't delete source message.", this_guild);
+				//else logging.print("[Local] Guild #", this_guild_orig, " can't delete source message.");
 				//msg.delete_message(); // had link or file, so delete.
 			}
 			catch (aegis::error e) {
-				logging.print("[Local][", tries + 1, "/7] Guild #", this_guild_orig, " delete_message couldn't delete message. Got error: ", e);
+				logg->error("[!][{}/7] Guild #{} delete_message couldn't delete message. Got error: {}.", tries + 1, this_guild, e);
 				std::this_thread::sleep_for(std::chrono::milliseconds(500));
 				for (size_t p = 0; p < 4; p++) std::this_thread::yield();
 			}
 			catch (std::exception e) {
-				logging.print("[Local][", tries + 1, "/7] Guild #", this_guild_orig, " delete_message couldn't delete message. Got error: ", e); 
+				logg->error("[!][{}/7] Guild #{} delete_message couldn't delete message. Got error: {}.", tries + 1, this_guild, e.what());
 				std::this_thread::sleep_for(std::chrono::milliseconds(500));
 				for (size_t p = 0; p < 4; p++) std::this_thread::yield();
 			}
 			catch (...) {
-				logging.print("[Local][", tries + 1, "/7] Guild #", this_guild_orig, " delete_message couldn't delete message. Unknown error.");
+				logg->error("[!][{}/7] Guild #{} delete_message couldn't delete message. Got unknown error.", tries + 1, this_guild);
 				std::this_thread::sleep_for(std::chrono::milliseconds(500));
 				for (size_t p = 0; p < 4; p++) std::this_thread::yield();
 			}
@@ -242,56 +254,6 @@ guild_data& guild_data::operator=(const guild_data& data)
 	for (auto& i : data.chats) chats[i.first] = i.second;
 	return *this;
 }
-
-/*void GuildHandle::handle_pendencies()
-{
-	while (keep_run) {
-		
-		std::this_thread::yield();
-
-		if (pendencies.size() == 0) {
-			std::this_thread::sleep_for(std::chrono::milliseconds(250));
-			std::this_thread::yield();
-			continue;
-		}
-
-		aegis::gateway::objects::message cpy;
-		bool good = false;
-		{
-			if (pendency_mutex.try_lock()) {
-				cpy = pendencies.front();
-				pendencies.erase(pendencies.begin());
-				good = true;
-				pendency_mutex.unlock();
-			}
-		}
-
-		if (!good) {
-			logging.print("[!] Guild #", guildid, " failed to task pendencies once.");
-			std::this_thread::yield();
-			continue;
-		}
-
-		try {
-			data.chats[cpy.get_channel_id()].handle_message(core, cpy);
-		}
-		catch (aegis::error e) {
-			logging.print("[!] Guild #", guildid, " couldn't handle message. Got error: ", e);
-			std::this_thread::sleep_for(std::chrono::milliseconds(500));
-			for (size_t p = 0; p < 4; p++) std::this_thread::yield();
-		}
-		catch (std::exception e) {
-			logging.print("[!] Guild #", guildid, " couldn't handle message. Got error: ", e);
-			std::this_thread::sleep_for(std::chrono::milliseconds(500));
-			for (size_t p = 0; p < 4; p++) std::this_thread::yield();
-		}
-		catch (...) {
-			logging.print("[!] Guild #", guildid, " couldn't handle message. Unknown error.");
-			std::this_thread::sleep_for(std::chrono::milliseconds(500));
-			for (size_t p = 0; p < 4; p++) std::this_thread::yield();
-		}
-	}
-}*/
 
 void GuildHandle::command(std::vector<std::string> args, aegis::channel& buck)
 {
@@ -316,7 +278,7 @@ void GuildHandle::command(std::vector<std::string> args, aegis::channel& buck)
 			"- specific remove link <contains> - remove a setting set earlier (pro tip: * clear everything)\n"
 			"- specific remove file <contains> - remove a setting set earlier (pro tip: * clear everything)\n";
 
-		slow_flush(msg, buck, guildid);
+		slow_flush(msg, buck, guildid, logg);
 	};
 
 	switch (len) {
@@ -331,12 +293,12 @@ void GuildHandle::command(std::vector<std::string> args, aegis::channel& buck)
 			for (size_t p = 0; p < uh.size(); p++) {
 				slicu += uh[p];
 				if (slicu.size() == 1900) {
-					slow_flush("```\n" + slicu + "```", buck, guildid);
+					slow_flush("```\n" + slicu + "```", buck, guildid, logg);
 					slicu.erase();
 				}
 			}
 			if (slicu.size() > 0) {
-				slow_flush("```\n" + slicu + "```", buck, guildid);
+				slow_flush("```\n" + slicu + "```", buck, guildid, logg);
 				slicu.erase();
 			}
 
@@ -353,7 +315,7 @@ void GuildHandle::command(std::vector<std::string> args, aegis::channel& buck)
 			data.mut.lock();
 			data.command_alias = res;
 			data.mut.unlock();
-			slow_flush("Has set " + res + " as command alias successfully.", buck, guildid);
+			slow_flush("Has set " + res + " as command alias successfully.", buck, guildid, logg);
 			save = true;
 
 			well_done = true;
@@ -385,7 +347,7 @@ void GuildHandle::command(std::vector<std::string> args, aegis::channel& buck)
 					sending = "Failed to get the ID from your command.";
 				}
 			}			
-			if (sending.length() > 0) slow_flush(sending, buck, guildid);
+			if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
 
 			well_done = true;
 		}
@@ -416,7 +378,7 @@ void GuildHandle::command(std::vector<std::string> args, aegis::channel& buck)
 					sending = "Failed to get the ID from your command.";
 				}
 			}
-			if (sending.length() > 0) slow_flush(sending, buck, guildid);
+			if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
 
 			well_done = true;
 		}
@@ -467,7 +429,7 @@ void GuildHandle::command(std::vector<std::string> args, aegis::channel& buck)
 						sending = "Failed to get the ID from your command.";
 					}
 				}
-				if (sending.length() > 0) slow_flush(sending, buck, guildid);
+				if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
 
 				well_done = true;
 			}
@@ -511,7 +473,7 @@ void GuildHandle::command(std::vector<std::string> args, aegis::channel& buck)
 						sending = "Failed to get the ID from your command.", buck, guildid;
 					}
 				}
-				if (sending.length() > 0) slow_flush(sending, buck, guildid);
+				if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
 
 				well_done = true;
 			}
@@ -566,7 +528,7 @@ void GuildHandle::command(std::vector<std::string> args, aegis::channel& buck)
 						sending = "Failed to get the ID from your command.";
 					}
 				}
-				if (sending.length() > 0) slow_flush(sending, buck, guildid);
+				if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
 
 				well_done = true;
 			}
@@ -610,7 +572,7 @@ void GuildHandle::command(std::vector<std::string> args, aegis::channel& buck)
 						sending = "Failed to get the ID from your command.";
 					}
 				}
-				if (sending.length() > 0) slow_flush(sending, buck, guildid);
+				if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
 
 				well_done = true;
 			}
@@ -632,7 +594,7 @@ void GuildHandle::command(std::vector<std::string> args, aegis::channel& buck)
 						sending = "Cleaned up ALL rulesets of this chat.";
 						save = true;
 					}
-					if (sending.length() > 0) slow_flush(sending, buck, guildid);
+					if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
 
 					well_done = true;
 				}
@@ -672,7 +634,7 @@ void GuildHandle::command(std::vector<std::string> args, aegis::channel& buck)
 							}
 						}
 					}
-					if (sending.length() > 0) slow_flush(sending, buck, guildid);
+					if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
 
 					well_done = true;
 				}
@@ -712,7 +674,7 @@ void GuildHandle::command(std::vector<std::string> args, aegis::channel& buck)
 							}
 						}
 					}
-					if (sending.length() > 0) slow_flush(sending, buck, guildid);
+					if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
 
 					well_done = true;
 				}
@@ -785,10 +747,10 @@ void GuildHandle::save_settings()
 		auto cpy = sav.dump();
 		fwrite(cpy.c_str(), sizeof(char), cpy.length(), fpp.get());
 
-		logging.print("[!] Guild #", guildid, " saved config successfully.");
+		logg->info("[!] Guild #{} saved config successfully.", guildid);
 	}
 	else {
-		logging.print("[!] Guild #", guildid, " failed to save config. Aborting save.");
+		logg->error("[!] Guild #{} failed to save config.", guildid);
 	}
 }
 
@@ -828,16 +790,17 @@ void GuildHandle::load_settings()
 			}
 		}
 
-		logging.print("[!] Guild #", guildid, " loaded config successfully.");
+		logg->info("[!] Guild #{} loaded config successfully.", guildid);
 	}
 	else {
-		logging.print("[!] Guild #", guildid, " failed to load config. (new?)");
+		logg->warn("[!] Guild #{} failed to load config. (new?)", guildid);
 	}
 }
 
 GuildHandle::GuildHandle(std::shared_ptr<aegis::core> bot, aegis::snowflake guild)
 {
 	core = bot;
+	logg = bot->log;
 	guildid = guild;
 
 	//pendency_keep_run = true;
@@ -893,7 +856,7 @@ void GuildHandle::handle(aegis::channel& src, aegis::gateway::objects::message m
 	if (m.get_content().find(main_cmd) == 0 || ((data.command_alias.length() > 0) && m.get_content().find(data.command_alias) == 0)) {
 
 		if (!has_admin_rights(m.get_guild(), m.get_user())) { // adm/owner/me
-			slow_flush("You have no permission.", src, guildid);
+			slow_flush("You have no permission.", src, guildid, logg);
 			m.delete_message();
 			return; 
 		}

@@ -1,8 +1,6 @@
 #pragma once
 
-#include "printer.h"
-#include "download/download.h"
-#include "slow_flush.h"
+#include "shared.h"
 
 #include <aegis.hpp>
 #include <thread>
@@ -57,6 +55,7 @@ struct guild_data {
 class GuildHandle {
 	guild_data data;
 	std::shared_ptr<aegis::core> core;
+	std::shared_ptr<spdlog::logger> logg;
 	unsigned long long guildid = 0;
 
 	//std::vector<aegis::gateway::objects::message> pendencies;

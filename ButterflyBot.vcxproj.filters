@@ -1,37 +1,42 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <ClCompile Include="main.cpp" />
     <ClCompile Include="download\download.cpp">
-      <Filter>Resources</Filter>
+      <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="handlers.cpp">
-      <Filter>Resources</Filter>
+      <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="slow_flush.cpp">
-      <Filter>Resources</Filter>
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="main.cpp">
+      <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="download\download.h">
-      <Filter>Resources</Filter>
+      <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="keys.h">
-      <Filter>Resources</Filter>
-    </ClInclude>
-    <ClInclude Include="printer.h">
-      <Filter>Resources</Filter>
+      <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="handlers.h">
-      <Filter>Resources</Filter>
+      <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="slow_flush.h">
-      <Filter>Resources</Filter>
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="shared.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <Filter Include="Resources">
+    <Filter Include="Header Files">
       <UniqueIdentifier>{0395923a-9de6-4215-85a3-b3b0cbfbc4ee}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{87e8ad9f-ab03-40ba-9549-e116455be9d9}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
 </Project>
