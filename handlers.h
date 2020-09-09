@@ -10,7 +10,7 @@
 
 const std::string main_cmd = "lsw/bb";
 const unsigned long long mee_dev = 280450898885607425; // myself, for debugging and help
-const std::string version = "V1.3.1.2";
+const std::string version = "V1.3.1.3";
 
 using namespace LSW::v5;
 

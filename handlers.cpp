@@ -269,7 +269,10 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 		std::this_thread::yield();
 		for (size_t tries = 0; tries < 7; tries++) {
 			try {
-				if (fallback) fallback->delete_message(msg.get_id());
+				if (fallback) {
+					auto mmm = fallback->delete_message(msg.get_id());
+					while (!mmm.available()) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+				}
 				else logg->error("[!] Guild #{} can't delete source message.", this_guild);
 				//else logging.print("[Local] Guild #", this_guild_orig, " can't delete source message.");
 				//msg.delete_message(); // had link or file, so delete.
@@ -1062,7 +1065,10 @@ void GuildHandle::handle(aegis::channel& src, aegis::gateway::objects::message m
 
 		if (!has_admin_rights(m.get_guild(), m.get_user())) { // adm/owner/me
 			slow_flush("You have no permission.", src, guildid, logg);
-			m.delete_message();
+
+			auto mmm = m.get_channel().delete_message(m.get_id());
+			while (!mmm.available()) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
 			return; 
 		}
 		size_t start = m.get_content().find(main_cmd) == 0 ? main_cmd.length() : data.command_alias.size();
