@@ -92,16 +92,16 @@ nlohmann::json chat_config::embed_link_gen(const bool show_link, const unsigned 
 	j["color"] = default_color;
 	j["author"]["name"] = ustr;
 	j["author"]["icon_url"] = uurl;
-	j["thumbnail"]["url"] = uurl;
+	if (show_user_thumbnail) j["thumbnail"]["url"] = uurl;
 	j["footer"]["text"] = std::to_string(uid);
 
 	if (show_link) {
 		const std::string url_m = "https://discordapp.com/channels/" + std::to_string(this_guild_orig) + "/" + std::to_string(cid) + "/" + std::to_string(mid);
 		j["url"] = url_m;
-		if (desc.length()) j["description"] = (show_link ? ("[`-> source <-`](" + url_m + ")") : "") + (cid ? "<#" + std::to_string(cid) + ">" : "") + (desc.length() ? ("\n```m\n" + desc + "```") : "");
+		if (desc.length()) j["description"] = (show_link ? ("[`-> source <-`](" + url_m + ")") : "") + (cid ? "<#" + std::to_string(cid) + ">" : "") + (desc.length() ? ((dont_use_md ? "\n\n" : "\n```m\n") + desc + (dont_use_md ? "" : "```")) : "");
 	}
 	else if (desc.length()) {
-		j["description"] = (cid ? "<#" + std::to_string(cid) + ">" : "") + "\n```m\n" + desc + "```";
+		j["description"] = (cid ? "<#" + std::to_string(cid) + ">" : "") + (dont_use_md ? "\n\n" : "\n```m\n") + desc + (dont_use_md ? "" : "```");
 	}
 	else if (cid) {
 		j["description"] = ("<#" + std::to_string(cid) + ">");
@@ -138,6 +138,12 @@ chat_config::chat_config(const chat_config& cc)
 void chat_config::load(nlohmann::json j, unsigned long long guild)
 {
 	this_guild_orig = guild;
+
+	if (j.count("show_user_thumbnail") && !j["show_user_thumbnail"].is_null())
+		show_user_thumbnail = j["show_user_thumbnail"].get<bool>();
+
+	if (j.count("dont_use_md") && !j["dont_use_md"].is_null())
+		dont_use_md = j["dont_use_md"].get<bool>();
 
 	if (j.count("autopoll") && !j["autopoll"].is_null())
 		autopoll = j["autopoll"].get<bool>();
@@ -194,6 +200,8 @@ nlohmann::json chat_config::export_config()
 {
 	nlohmann::json j;
 
+	j["show_user_thumbnail"] = show_user_thumbnail;
+	j["dont_use_md"] = dont_use_md;
 	j["autopoll"] = autopoll;
 	j["embed_fallback"] = embed_fallback;
 
@@ -223,6 +231,8 @@ chat_config& chat_config::operator=(const chat_config& cc)
 {
 	this_guild_orig = cc.this_guild_orig;
 
+	show_user_thumbnail = cc.show_user_thumbnail;
+	dont_use_md = cc.dont_use_md;
 	autopoll = cc.autopoll;
 	embed_fallback = cc.embed_fallback;
 
@@ -255,6 +265,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 	auto links = links_orig;
 	auto files = files_orig;
 	auto nonee = nlf_orig;
+	auto content = msg.get_content();
 
 	aegis::channel* fallback = fallback = get_channel_safe(msg.get_channel_id(), core);
 	for (size_t p = 0; p < 7 && !fallback; p++) {
@@ -275,14 +286,21 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 	ELSE					=> COPY
 	*/
 
+	// if !dont_use_md, remove ``` (because those will break the block)
+	if (!dont_use_md) {
+		for (size_t p = content.find("```"); p != std::string::npos; p = content.find("```")) {
+			content = content.substr(0, p) + (content.length() > p + 3 ? content.substr(p + 3) : "");
+		}
+	}
+
 
 	// >> LINK
-	if (std::regex_search(msg.get_content(), regex_link)) {
+	if (std::regex_search(content, regex_link)) {
 		logg->info("Got link. Handling...");
 
 		std::lock_guard<std::mutex> luck(mute);
 		for (auto& i : link_overwrite_contains) {
-			if (msg.get_content().find(i.first) != std::string::npos) {
+			if (content.find(i.first) != std::string::npos) {
 				chat_link = i.second;
 				break;
 			}
@@ -322,7 +340,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 		logg->info("Got not link nor file. Handling...");
 
 		for (auto& i : nlf_overwrite_contains) {
-			if (msg.get_content().find(i.first) != std::string::npos) {
+			if (content.find(i.first) != std::string::npos) {
 				chat_none = i.second;
 				break;
 			}
@@ -352,7 +370,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 						msg.author.id,
 						"https://cdn.discordapp.com/avatars/" + std::to_string(msg.author.id) + "/" + msg.author.avatar + ".png?size=256",
 						msg.author.username + "#" + msg.author.discriminator,
-						msg.get_content().length() > 2000 ? msg.get_content().substr(0, 2000) : msg.get_content()
+						content.length() > 2000 ? content.substr(0, 2000) : content
 					),
 					*ch,
 					this_guild,
@@ -363,7 +381,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 				if (!link_ref_back) handle_poll(thismsg);
 			}
 			else {
-				std::string to_send = "`" + msg.author.username + "#" + msg.author.discriminator + ":` " + msg.get_content();
+				std::string to_send = "`" + msg.author.username + "#" + msg.author.discriminator + ":` " + content;
 				if (to_send.length() > 2000) to_send = to_send.substr(0, 2000);
 
 				thismsg = slow_flush(to_send, *ch, this_guild, logg);
@@ -381,7 +399,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 						msg.author.id,
 						"https://cdn.discordapp.com/avatars/" + std::to_string(msg.author.id) + "/" + msg.author.avatar + ".png?size=256",
 						msg.author.username + "#" + msg.author.discriminator,
-						msg.get_content().length() > str_max_len_embed ? msg.get_content().substr(0, str_max_len_embed - 3) + "..." : msg.get_content()
+						content.length() > str_max_len_embed ? content.substr(0, str_max_len_embed - 3) + "..." : content
 					),
 					*fallback,
 					this_guild,
@@ -405,7 +423,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 		int failure = 1;
 
 		if (ch && realch) {
-			std::string to_send = "`" + msg.author.username + "#" + msg.author.discriminator + ":` " + (chat_link ? "" : (" " + msg.get_content()));
+			std::string to_send = "`" + msg.author.username + "#" + msg.author.discriminator + ":` " + (chat_link ? "" : (" " + content));
 			if (to_send.length() > 2000) to_send = to_send.substr(0, 2000);
 
 			failure = false;
@@ -442,7 +460,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 							msg.author.id,
 							"https://cdn.discordapp.com/avatars/" + std::to_string(msg.author.id) + "/" + msg.author.avatar + ".png?size=256",
 							msg.author.username + "#" + msg.author.discriminator,
-							msg.get_content().length() > 2000 ? msg.get_content().substr(0, 2000) : msg.get_content(),
+							content.length() > 2000 ? content.substr(0, 2000) : content,
 							source.attachments.size() ? source.attachments[0].url : ""
 						),
 						*realch,
@@ -462,7 +480,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 								msg.author.id,
 								"https://cdn.discordapp.com/avatars/" + std::to_string(msg.author.id) + "/" + msg.author.avatar + ".png?size=256",
 								msg.author.username + "#" + msg.author.discriminator,
-								msg.get_content().length() > str_max_len_embed ? msg.get_content().substr(0, str_max_len_embed - 3) + "..." : msg.get_content(),
+								content.length() > str_max_len_embed ? content.substr(0, str_max_len_embed - 3) + "..." : content,
 								source.attachments.size() ? source.attachments[0].url : ""
 							),
 							*fallback,
@@ -493,7 +511,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 										msg.author.id,
 										"https://cdn.discordapp.com/avatars/" + std::to_string(msg.author.id) + "/" + msg.author.avatar + ".png?size=256",
 										msg.author.username + "#" + msg.author.discriminator,
-										msg.get_content().length() > str_max_len_embed ? msg.get_content().substr(0, str_max_len_embed - 3) + "..." : msg.get_content(),
+										content.length() > str_max_len_embed ? content.substr(0, str_max_len_embed - 3) + "..." : content,
 										source.attachments.size() ? source.attachments[0].url : ""
 									),
 									*fallback,
@@ -506,63 +524,6 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 						}
 					}
 				}
-				/*if (slow_flush(to_send, *ch, this_guild, logg)) {
-					
-
-
-						slowflush_end thismsg;
-
-						if (embed_fallback) {
-							thismsg = slow_flush_embed(
-								embed_link_gen(
-									msg.author.id,
-									"https://cdn.discordapp.com/avatars/" + std::to_string(msg.author.id) + "/" + msg.author.avatar + ".png?size=256",
-									msg.author.username + "#" + msg.author.discriminator,
-									msg.get_content().length() > str_max_len_embed ? msg.get_content().substr(0, str_max_len_embed - 3) + "..." : msg.get_content(),
-									thismsg.attachments.size() ? thismsg.attachments[0].url : ""
-								),
-								*realch,
-								this_guild,
-								logg
-							);
-
-							failure = !thismsg;
-						}
-						else {
-							std::string to_send = "`" + msg.author.username + "#" + msg.author.discriminator + ":` " + msg.get_content();
-							if (to_send.length() > 2000) to_send = to_send.substr(0, 2000);
-
-							thismsg = slow_flush(to_send, *ch, this_guild, logg);
-
-							failure = !thismsg;
-						}
-
-						if (link_ref_back && fallback && !failure) {
-							auto ennnn = slow_flush_embed(
-								embed_link_gen(
-									files_ref_show_ref,
-									chat_file,
-									thismsg.get_id(),
-									msg.author.id,
-									"https://cdn.discordapp.com/avatars/" + std::to_string(msg.author.id) + "/" + msg.author.avatar + ".png?size=256",
-									msg.author.username + "#" + msg.author.discriminator,
-									msg.get_content().length() > str_max_len_embed ? msg.get_content().substr(0, str_max_len_embed - 3) + "..." : msg.get_content(),
-									thismsg.attachments.size() ? thismsg.attachments[0].url : ""
-								),
-								*fallback,
-								this_guild,
-								logg
-							);
-
-							if (ennnn.good() && autopoll) {
-								auto fuu = ennnn.create_reaction("%F0%9F%91%8D");
-								while (!fuu.available()) std::this_thread::sleep_for(std::chrono::milliseconds(50));
-								auto fuu2 = ennnn.create_reaction("%F0%9F%91%8E");
-								while (!fuu2.available()) std::this_thread::sleep_for(std::chrono::milliseconds(50));
-							}
-						}
-					}
-				}*/
 			}
 		}
 
@@ -575,7 +536,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 	if (chat_link == 0 && chat_file == 0 && chat_none > 1) { // not link and no file, DEFAULT chat_none				<< NONES || just_delete_source
 		logg->info("Moving/Copying text...");
 
-		if (msg.get_content().length()) {
+		if (content.length()) {
 			aegis::channel* ch = get_channel_safe(chat_none, core);
 			bool failure = true;
 
@@ -589,7 +550,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 							msg.author.id,
 							"https://cdn.discordapp.com/avatars/" + std::to_string(msg.author.id) + "/" + msg.author.avatar + ".png?size=256",
 							msg.author.username + "#" + msg.author.discriminator,
-							msg.get_content().length() > 2000 ? msg.get_content().substr(0, 2000) : msg.get_content()
+							content.length() > 2000 ? content.substr(0, 2000) : content
 						),
 						*ch,
 						this_guild,
@@ -600,7 +561,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 					if (!link_ref_back) handle_poll(thismsg);
 				}
 				else {													// NOT EVERYTHING EMBED
-					std::string to_send = "`" + msg.author.username + "#" + msg.author.discriminator + ":` " + msg.get_content();
+					std::string to_send = "`" + msg.author.username + "#" + msg.author.discriminator + ":` " + content;
 					if (to_send.length() > 2000) to_send = to_send.substr(0, 2000);
 
 					thismsg = slow_flush(to_send, *ch, this_guild, logg);
@@ -620,7 +581,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 							msg.author.id,
 							"https://cdn.discordapp.com/avatars/" + std::to_string(msg.author.id) + "/" + msg.author.avatar + ".png?size=256",
 							msg.author.username + "#" + msg.author.discriminator,
-							msg.get_content().length() > str_max_len_embed ? msg.get_content().substr(0, str_max_len_embed - 3) + "..." : msg.get_content()
+							content.length() > str_max_len_embed ? content.substr(0, str_max_len_embed - 3) + "..." : content
 						),
 						*fallback,
 						this_guild,
@@ -630,7 +591,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 					handle_poll(ennnn);
 				}
 				/*
-				std::string to_send = "`" + msg.author.username + "#" + msg.author.discriminator + ":` " + msg.get_content();
+				std::string to_send = "`" + msg.author.username + "#" + msg.author.discriminator + ":` " + content;
 				if (to_send.length() > 2000) to_send = to_send.substr(0, 2000);
 
 				if (auto thismsg = slow_flush(to_send, *ch, this_guild, logg); thismsg) {
@@ -645,7 +606,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 								msg.author.id,
 								"https://cdn.discordapp.com/avatars/" + std::to_string(msg.author.id) + "/" + msg.author.avatar + ".png?size=256",
 								msg.author.username + "#" + msg.author.discriminator,
-								msg.get_content().length() > str_max_len_embed ? msg.get_content().substr(0, str_max_len_embed - 3) + "..." : msg.get_content()
+								content.length() > str_max_len_embed ? content.substr(0, str_max_len_embed - 3) + "..." : content
 							),
 							*fallback,
 							this_guild,
@@ -724,16 +685,21 @@ void GuildHandle::command(std::vector<std::string> args, aegis::channel& buck)
 	bool save = false;
 	bool well_done = false;
 
-	auto common_help = [&] {
-		std::string msg =
+	std::function<void(void)> common_help = [&] {
+		
+		const std::string msg_pack[] = {
 			"**Commands:**\n"
 			"```md\n"
 			"# Global:\n"
 			"- debug - shows all config (in json)\n"
 			"- debughere - shows all config (in json) in this chat\n"
 			"- alias <command_alias> - add an alias, like ~\n"
-			"- admintag add/remove <id> - allow or not a tag to run these commands\n"
+			"- admintag add/remove <id> - allow or not a tag to run these commands\n```",
+
+			"```md\n"
 			"# Local:\n"
+			"- showuserthumbnail - enables/disables user big thumbnail\n"
+			"- dontusemd - enables/disables the `code block` inside embeds\n"
 			"- autopoll - enables/disables auto thumbsup/down reaction\n"
 			"- embedall <id> - enables embed to every message (make sure links permission is set; these commands won't be embed). <id> is the chat where it will send raw files. (* = clear)\n"
 			"- delallconfig - removes ALL configuration in this chat\n"
@@ -752,9 +718,12 @@ void GuildHandle::command(std::vector<std::string> args, aegis::channel& buck)
 			"- specific remove * * - removes ALL specific rules (yes, two * *, one means any entry, second means any in those entries)\n"
 			"- specific remove link <contains> - remove a rule set earlier (pro tip: * clear everything)\n"
 			"- specific remove file <contains> - remove a rule set earlier (pro tip: * clear everything)\n"
-			"- specific remove text <contains> - remove a rule set earlier (pro tip: * clear everything)\n```";
+			"- specific remove text <contains> - remove a rule set earlier (pro tip: * clear everything)\n```"
+		};
 
-		slow_flush(msg, buck, guildid, logg);
+		for (auto& aaa : msg_pack) {
+			slow_flush(aaa, buck, guildid, logg);
+		}
 	};
 
 	switch (len) {
@@ -817,6 +786,40 @@ void GuildHandle::command(std::vector<std::string> args, aegis::channel& buck)
 
 				friendo.autopoll = !friendo.autopoll;
 				sending = std::string("Autopoll ") + (friendo.autopoll ? "ENABLED" : "DISABLED");
+				save = true;
+			}
+			if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
+
+			well_done = true;
+		}
+		else if (yo == "dontusemd") {
+
+			std::string sending;
+			{
+				std::lock_guard<std::mutex> luck_me(data.mut);
+				auto ch_id = buck.get_id();
+				auto& friendo = data.chats[ch_id];
+				std::lock_guard<std::mutex> luck(friendo.mute);
+
+				friendo.dont_use_md = !friendo.dont_use_md;
+				sending = std::string("Automatic block of text is now ") + (!friendo.dont_use_md ? "ENABLED" : "DISABLED");
+				save = true;
+			}
+			if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
+
+			well_done = true;
+		}
+		else if (yo == "showuserthumbnail") {
+
+			std::string sending;
+			{
+				std::lock_guard<std::mutex> luck_me(data.mut);
+				auto ch_id = buck.get_id();
+				auto& friendo = data.chats[ch_id];
+				std::lock_guard<std::mutex> luck(friendo.mute);
+
+				friendo.show_user_thumbnail = !friendo.show_user_thumbnail;
+				sending = std::string("User thumbnail in embed is now ") + (friendo.show_user_thumbnail ? "ENABLED" : "DISABLED");
 				save = true;
 			}
 			if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);

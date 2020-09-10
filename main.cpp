@@ -39,6 +39,12 @@ int main()
 			logg->info("[!] Joined/Connected Guild #{} ({}) from {}", obj.guild.id, obj.guild.name, obj.guild.region);
 
 			guilds_m.lock();
+			for (size_t p = 0; p < guilds.size(); p++) {
+				if (guilds[p]->amI(obj.guild.id)) {
+					guilds_m.unlock();
+					return;
+				}
+			}
 			guilds.emplace_back(std::make_shared<GuildHandle>(thebot, obj.guild.id));
 			auto cpy = guilds.back();
 			guilds_m.unlock();

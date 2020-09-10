@@ -11,7 +11,7 @@
 const std::string main_cmd = "lsw/bb";
 const unsigned long long mee_dev = 280450898885607425; // myself, for debugging and help
 const unsigned long long bot_ids[2] = { 524361154294972416, /*beta:*/752301949528834068 };
-const std::string version = "V1.4.0.1";
+const std::string version = "V1.4.0.4";
 
 const char recycle_emoji[] = u8"%E2%99%BB%EF%B8%8F";
 const char delete_emoji[] = u8"%E2%9D%8C";
@@ -78,6 +78,8 @@ public:
 	std::vector<std::pair<std::string, unsigned long long>> nlf_overwrite_contains;
 	mutable std::mutex mute;
 
+	bool show_user_thumbnail = true;
+	bool dont_use_md = false;
 	bool autopoll = false; // automatically react to the latest message.
 	unsigned long long embed_fallback = 0; // if set, all messages will be embed and files will be thrown here. if 0, cancel
 
