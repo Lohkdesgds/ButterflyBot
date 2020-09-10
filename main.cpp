@@ -18,7 +18,7 @@ void nolock(std::function<void(void)> f, std::string wher = "") {
 
 int main()
 {
-	std::vector<std::unique_ptr<GuildHandle>> guilds;
+	std::vector<std::shared_ptr<GuildHandle>> guilds;
 	std::mutex guilds_m;
 	bool ignore_all_ending_lmao = false;
 
@@ -38,9 +38,11 @@ int main()
 
 			logg->info("[!] Joined/Connected Guild #{} ({}) from {}", obj.guild.id, obj.guild.name, obj.guild.region);
 
-			std::lock_guard<std::mutex> luck(guilds_m);
-			guilds.emplace_back(std::make_unique<GuildHandle>(thebot, obj.guild.id));
-			guilds.back()->start();
+			guilds_m.lock();
+			guilds.emplace_back(std::make_shared<GuildHandle>(thebot, obj.guild.id));
+			auto cpy = guilds.back();
+			guilds_m.unlock();
+			cpy->start();
 
 			}, "set_on_guild_create");
 		});
@@ -67,19 +69,24 @@ int main()
 
 			if (obj.msg.author.is_bot()) return;
 
-			std::lock_guard<std::mutex> luck(guilds_m);
+			guilds_m.lock();
 			for (auto& i : guilds) {
 				if (i->amI(obj.msg.get_guild_id())) {
-					i->handle(obj.channel, obj.msg);
+					auto cpy = i;
+					guilds_m.unlock();
+					cpy->handle(obj.channel, obj.msg);
 					return;
 				}
 			}
 
 			logg->info("[!] Got new message from unknown source?! Creating Guild #{}...", obj.msg.get_guild_id());
 
-			guilds.emplace_back(std::make_unique<GuildHandle>(thebot, obj.msg.get_guild_id()));
+			guilds.emplace_back(std::make_shared<GuildHandle>(thebot, obj.msg.get_guild_id()));
 
-			guilds.back()->handle(obj.channel, obj.msg); // handle
+			auto cpy = guilds.back();
+			guilds_m.unlock();
+
+			cpy->handle(obj.channel, obj.msg); // handle
 
 			}, "set_on_message_create");
 		});
@@ -89,10 +96,12 @@ int main()
 			if (obj.msg.get_content().empty()) return;
 			if (obj.msg.author.is_bot()) return;
 
-			std::lock_guard<std::mutex> luck(guilds_m);
+			guilds_m.lock();
 			for (auto& i : guilds) {
 				if (i->amI(obj.msg.get_guild_id())) {
-					i->handle(obj.channel, obj.msg);
+					auto cpy = i;
+					guilds_m.unlock();
+					cpy->handle(obj.channel, obj.msg);
 					return;
 				}
 			}
@@ -101,11 +110,51 @@ int main()
 
 			guilds.emplace_back(std::make_unique<GuildHandle>(thebot, obj.msg.get_guild_id()));
 
-			guilds.back()->handle(obj.channel, obj.msg); // handle
+			auto cpy = guilds.back();
+			guilds_m.unlock();
+
+			cpy->handle(obj.channel, obj.msg); // handle
 
 			}, "set_on_message_update");
 		});
+	thebot->set_on_message_reaction_add([&](aegis::gateway::events::message_reaction_add obj) {
+		if (ignore_all_ending_lmao) return;
+		nolock([&] {
+			obj.emoji.user = obj.user_id; // come on
 
+			if ([&] {for (auto& i : bot_ids) if (obj.user_id == i) return true; return false; }()) return;
+
+			guilds_m.lock();
+			for (auto& i : guilds) {
+				if (i->amI(obj.guild_id)) {
+					auto cpy = i;
+					guilds_m.unlock();
+					aegis::channel* ch = nullptr;
+					for (size_t p = 0; p < 5 && !ch; p++) {
+						ch = thebot->channel_create(obj.channel_id);
+					}
+					if (ch) cpy->handle(*ch, obj.message_id, obj.emoji);
+					else logg->error("[!] Guild #{} failed to create channel to handle emoji.", obj.guild_id);
+
+					return;
+				}
+			}
+
+			logg->info("[!] Got new message from unknown source?! Creating Guild #{}...", obj.guild_id);
+
+			guilds.emplace_back(std::make_shared<GuildHandle>(thebot, obj.guild_id));
+
+			auto cpy = guilds.back();
+			guilds_m.unlock();
+
+			aegis::channel* ch = nullptr;
+			for (size_t p = 0; p < 5 && !ch; p++) {
+				ch = thebot->channel_create(obj.channel_id);
+			}
+			if (ch) cpy->handle(*ch, obj.message_id, obj.emoji);
+
+			}, "set_on_message_create");
+		});
 
 
 	thebot->run();

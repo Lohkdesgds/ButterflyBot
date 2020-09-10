@@ -10,12 +10,43 @@
 
 const std::string main_cmd = "lsw/bb";
 const unsigned long long mee_dev = 280450898885607425; // myself, for debugging and help
-const std::string version = "V1.3.1.3";
+const unsigned long long bot_ids[2] = { 524361154294972416, /*beta:*/752301949528834068 };
+const std::string version = "V1.4.0.1";
+
+const char recycle_emoji[] = u8"%E2%99%BB%EF%B8%8F";
+const char delete_emoji[] = u8"%E2%9D%8C";
 
 using namespace LSW::v5;
 
 
+
+const auto default_color = 0xA321FF;
+const size_t str_max_len_embed = 50;
 const std::regex regex_link("http(?:s?)://([\\w_-]+(?:(?:\\.[\\w_-]+)+))([\\w.,@?^=%&:/~+#-]*[\\w@?^=%&/~+#-])?");
+
+
+inline const std::string transformWeirdo(const std::string in)
+{
+	std::string out;
+	for (auto& i : in) {
+		char temp[5];
+		sprintf_s(temp, "%c%X", '%', (unsigned char)(i + sizeof(char) / 2));
+		out += temp;
+	}
+	return out;
+}
+
+
+
+
+
+class handle_in_steps {
+	std::vector<std::function<void(void)>> list;
+	std::mutex m;
+public:
+	void add(std::function<void(void)>);
+	bool task();
+};
 
 
 
@@ -23,14 +54,32 @@ class chat_config {
 	aegis::channel* get_channel_safe(unsigned long long, std::shared_ptr<aegis::core>&) const;
 
 	unsigned long long this_guild_orig = 0;
+
+	// show ref link, channel id, message id, user id, user avatar url, user name, text, image preview
+	nlohmann::json embed_link_gen(const bool, const unsigned long long, const unsigned long long, const unsigned long long, const std::string, const std::string, const std::string = "", const std::string = "") const;
+	// if you want just the embed with no linking and such, call this. Args: user_id, user_url, user_name, desc = "", imgurl = ""
+	nlohmann::json embed_link_gen(const unsigned long long, const unsigned long long, const std::string, const std::string, const std::string = "", const std::string = "") const;
+
+	void handle_poll(slowflush_end&) const;
 public:
+	bool link_ref_back = false;
+	bool link_ref_show_ref = true;
 	unsigned long long links_orig = 0;
 	std::vector<std::pair<std::string, unsigned long long>> link_overwrite_contains;
+
+	bool files_ref_back = false;
+	bool files_ref_show_ref = true;
 	unsigned long long files_orig = 0;
 	std::vector<std::pair<std::string, unsigned long long>> files_overwrite_contains;
-	unsigned long long not_link_or_file_orig = 0;
-	std::vector<std::pair<std::string, unsigned long long>> not_link_or_file_overwrite_contains;
+
+	bool nlf_ref_back = false; // nlf == not link (or) file
+	bool nlf_ref_show_ref = true;
+	unsigned long long nlf_orig = 0;
+	std::vector<std::pair<std::string, unsigned long long>> nlf_overwrite_contains;
 	mutable std::mutex mute;
+
+	bool autopoll = false; // automatically react to the latest message.
+	unsigned long long embed_fallback = 0; // if set, all messages will be embed and files will be thrown here. if 0, cancel
 
 	chat_config() = default;
 	chat_config(const chat_config&);
@@ -67,6 +116,10 @@ class GuildHandle {
 	//std::vector<aegis::gateway::objects::message> pendencies;
 	//std::thread pendency_handler;
 	//std::mutex pendency_mutex;
+
+	std::thread hs_thr;
+	handle_in_steps hs;
+
 	bool keep_run = false;
 
 	//void handle_pendencies();
@@ -95,4 +148,5 @@ public:
 	bool amI(aegis::snowflake);
 
 	void handle(aegis::channel&, aegis::gateway::objects::message);
+	void handle(aegis::channel&, const unsigned long long, aegis::gateway::objects::emoji);
 };
