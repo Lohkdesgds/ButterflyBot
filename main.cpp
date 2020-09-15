@@ -22,10 +22,16 @@ int main()
 	std::mutex guilds_m;
 	bool ignore_all_ending_lmao = false;
 
-	std::shared_ptr<aegis::core> thebot = std::shared_ptr<aegis::core>(new aegis::core(aegis::create_bot_t().log_level(spdlog::level::trace).token(token)), [](aegis::core* c) {
+	std::shared_ptr<aegis::core> thebot = std::shared_ptr<aegis::core>(new aegis::core(spdlog::level::trace, std::thread::hardware_concurrency() < 4 ? 4 : std::thread::hardware_concurrency()), [](aegis::core* c) {
 		c->shutdown();
 		delete c;
 		});
+		
+		
+		/*std::shared_ptr<aegis::core>(new aegis::core(aegis::create_bot_t().log_level(spdlog::level::trace).token(token)), [](aegis::core* c) {
+		c->shutdown();
+		delete c;
+		});*/
 
 	std::shared_ptr<spdlog::logger> logg = thebot->log;
 	logg->info("[!] Bot has started.");
@@ -197,7 +203,7 @@ int main()
 	// kill all threads
 	{
 		std::lock_guard<std::mutex> luck(guilds_m);
-		for (auto& i : guilds) i->end();
+		//for (auto& i : guilds) i->end();
 		guilds.clear();
 	}
 

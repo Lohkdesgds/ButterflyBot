@@ -11,7 +11,7 @@
 const std::string main_cmd = "lsw/bb";
 const unsigned long long mee_dev = 280450898885607425; // myself, for debugging and help
 const unsigned long long bot_ids[2] = { 524361154294972416, /*beta:*/752301949528834068 };
-const std::string version = "V1.4.0.4";
+const std::string version = "V1.4.1.1";
 
 const char recycle_emoji[] = u8"%E2%99%BB%EF%B8%8F";
 const char delete_emoji[] = u8"%E2%9D%8C";
@@ -21,7 +21,7 @@ using namespace LSW::v5;
 
 
 const auto default_color = 0xA321FF;
-const size_t str_max_len_embed = 50;
+const size_t str_max_len_embed = 60;
 const std::regex regex_link("http(?:s?)://([\\w_-]+(?:(?:\\.[\\w_-]+)+))([\\w.,@?^=%&:/~+#-]*[\\w@?^=%&/~+#-])?");
 
 
@@ -38,15 +38,13 @@ inline const std::string transformWeirdo(const std::string in)
 
 
 
-
-
-class handle_in_steps {
+/*class handle_in_steps {
 	std::vector<std::function<void(void)>> list;
 	std::mutex m;
 public:
 	void add(std::function<void(void)>);
 	bool task();
-};
+};*/
 
 
 
@@ -61,6 +59,7 @@ class chat_config {
 	nlohmann::json embed_link_gen(const unsigned long long, const unsigned long long, const std::string, const std::string, const std::string = "", const std::string = "") const;
 
 	void handle_poll(slowflush_end&) const;
+	std::string _fix_content(const std::string&) const;
 public:
 	bool link_ref_back = false;
 	bool link_ref_show_ref = true;
@@ -119,10 +118,11 @@ class GuildHandle {
 	//std::thread pendency_handler;
 	//std::mutex pendency_mutex;
 
-	std::thread hs_thr;
-	handle_in_steps hs;
+	//std::thread hs_thr;
+	//handle_in_steps hs;
 
 	bool keep_run = false;
+
 
 	//void handle_pendencies();
 

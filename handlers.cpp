@@ -2,7 +2,7 @@
 
 
 
-void handle_in_steps::add(std::function<void(void)> f)
+/*void handle_in_steps::add(std::function<void(void)> f)
 {
 	while (!m.try_lock()) std::this_thread::yield();
 	list.emplace_back(std::move(f));
@@ -44,7 +44,7 @@ bool handle_in_steps::task()
 	std::this_thread::sleep_for(std::chrono::milliseconds(750));
 	std::this_thread::yield();
 	return uu;
-}
+}*/
 
 aegis::channel* chat_config::get_channel_safe(unsigned long long ch, std::shared_ptr<aegis::core>& bot) const
 {
@@ -125,6 +125,24 @@ void chat_config::handle_poll(slowflush_end& e) const
 	while (!fuu.available()) std::this_thread::sleep_for(std::chrono::milliseconds(50));
 	auto fuu2 = e.create_reaction("%F0%9F%91%8E");
 	while (!fuu2.available()) std::this_thread::sleep_for(std::chrono::milliseconds(50));
+}
+
+std::string chat_config::_fix_content(const std::string& str) const
+{
+	std::string cpy = str;
+	/*for (auto& i : str) {
+		if (i == '`' || i == '@') cpy += '\\';
+		cpy += i;
+	}*/
+	std::smatch m;
+	std::string wrk;
+	while (std::regex_search(cpy, m, regex_link)) {
+		wrk += cpy.substr(0, m.position(0)) + "<" + m[0].str() + ">";
+		cpy = (cpy.length() > (m[0].str().length() + m.position(0)) ? (cpy.substr(m[0].str().length() + m.position(0))) : "");
+	}
+	if (!cpy.empty()) wrk += cpy;
+	wrk = wrk.substr(0, safe_msg_limit);
+	return std::move(wrk);
 }
 
 
@@ -259,13 +277,13 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 {
 	// copy
 	std::shared_ptr<spdlog::logger> logg = core->log;
-	logg->info("Handling message...");
+	//logg->info("Handling message...");
 
 	auto this_guild = this_guild_orig;
 	auto links = links_orig;
 	auto files = files_orig;
 	auto nonee = nlf_orig;
-	auto content = msg.get_content();
+	auto content = msg.get_content();// .substr(0, safe_msg_limit);
 
 	aegis::channel* fallback = fallback = get_channel_safe(msg.get_channel_id(), core);
 	for (size_t p = 0; p < 7 && !fallback; p++) {
@@ -293,10 +311,12 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 		}
 	}
 
+	content = _fix_content(content);
+
 
 	// >> LINK
 	if (std::regex_search(content, regex_link)) {
-		logg->info("Got link. Handling...");
+		//logg->info("Got link. Handling...");
 
 		std::lock_guard<std::mutex> luck(mute);
 		for (auto& i : link_overwrite_contains) {
@@ -312,7 +332,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 
 	// >> FILE
 	if (msg.attachments.size() > 0) {
-		logg->info("Got file. Handling...");
+		//logg->info("Got file. Handling...");
 
 		auto& at = msg.attachments[0];
 		std::lock_guard<std::mutex> luck(mute);
@@ -337,7 +357,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 
 	// >> TEXT
 	if (!chat_link && !chat_file) {
-		logg->info("Got not link nor file. Handling...");
+		//logg->info("Got not link nor file. Handling...");
 
 		for (auto& i : nlf_overwrite_contains) {
 			if (content.find(i.first) != std::string::npos) {
@@ -355,7 +375,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 
 	// HANDLE LINK
 	if (chat_link > 1) { // has link, share link in links section (might have file)				<< LINKS
-		logg->info("Moving/Copying link...");
+		//logg->info("Moving/Copying link...");
 
 		aegis::channel* ch = get_channel_safe(chat_link, core);
 		bool failure = true;
@@ -370,7 +390,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 						msg.author.id,
 						"https://cdn.discordapp.com/avatars/" + std::to_string(msg.author.id) + "/" + msg.author.avatar + ".png?size=256",
 						msg.author.username + "#" + msg.author.discriminator,
-						content.length() > 2000 ? content.substr(0, 2000) : content
+						content
 					),
 					*ch,
 					this_guild,
@@ -382,7 +402,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 			}
 			else {
 				std::string to_send = "`" + msg.author.username + "#" + msg.author.discriminator + ":` " + content;
-				if (to_send.length() > 2000) to_send = to_send.substr(0, 2000);
+				to_send = to_send.substr(0, safe_msg_limit);
 
 				thismsg = slow_flush(to_send, *ch, this_guild, logg);
 
@@ -390,7 +410,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 				if (!link_ref_back) handle_poll(thismsg);
 			}
 
-			if (link_ref_back && fallback && !failure) {
+			if (link_ref_back && fallback && !failure && chat_file <= 1) { // chat_file <= 1 means it will be copied by file already
 				auto ennnn = slow_flush_embed(
 					embed_link_gen(
 						link_ref_show_ref,
@@ -416,7 +436,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 
 	// HANDLE FILE
 	if (chat_file > 1) { // has file, share file in files section (might have link)				<< FILES
-		logg->info("Moving/Copying file...");
+		//logg->info("Moving/Copying file...");
 
 		aegis::channel* ch = get_channel_safe(embed_fallback ? embed_fallback : chat_file, core);
 		aegis::channel* realch = embed_fallback ? get_channel_safe(chat_file, core) : ch;
@@ -424,7 +444,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 
 		if (ch && realch) {
 			std::string to_send = "`" + msg.author.username + "#" + msg.author.discriminator + ":` " + (chat_link ? "" : (" " + content));
-			if (to_send.length() > 2000) to_send = to_send.substr(0, 2000);
+			to_send = to_send.substr(0, safe_msg_limit);
 
 			failure = false;
 
@@ -432,26 +452,32 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 			Downloader down;
 			down.getASync(i.url.c_str());
 
-			logg->info("[!] Guild #{} is downloading {}...", this_guild, i.filename);
+			//logg->info("[!] Guild #{} is downloading {}...", this_guild, i.filename);
 
 			while (!down.ended()) {
 				std::this_thread::yield();
 				std::this_thread::sleep_for(std::chrono::milliseconds(200));
 			}
 
-			logg->info("[!] Guild #{} downloaded {}. (size: {} byte(s))", this_guild, i.filename, down.read().size());
 
 			if (down.read().size() >= MAX_FILE_SIZE) {
+				logg->info("[!] Guild #{} can't copy download {}. (size: {} byte(s))", this_guild, i.filename, down.read().size());
 				failure = 2;
 			}
 			else {
+				logg->info("[!] Guild #{} downloaded {}. (size: {} byte(s))", this_guild, i.filename, down.read().size());
 				aegis::rest::aegis_file fp;
 				fp.name = i.filename;
+				std::this_thread::sleep_for(std::chrono::milliseconds(20));
+				//std::cout << "CPY>";
 				for (auto& k : down.read()) fp.data.push_back(k);
+				//std::cout << "DONE>";
 
 				if (embed_fallback) {								// EVERYTHING EMBED!
+					//std::cout << "EMBFB>";
 
 					slowflush_end source = slow_flush(fp, *ch, this_guild, logg); //send to embed fallback chat
+					//std::cout << "S1N>";
 					slowflush_end thismsg;
 
 					thismsg = slow_flush_embed( // send to real file chat with embed
@@ -460,7 +486,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 							msg.author.id,
 							"https://cdn.discordapp.com/avatars/" + std::to_string(msg.author.id) + "/" + msg.author.avatar + ".png?size=256",
 							msg.author.username + "#" + msg.author.discriminator,
-							content.length() > 2000 ? content.substr(0, 2000) : content,
+							content,
 							source.attachments.size() ? source.attachments[0].url : ""
 						),
 						*realch,
@@ -468,10 +494,13 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 						logg
 					);
 
+					//std::cout << "S2E>";
+
 					failure = !thismsg;
 					if (!files_ref_back) handle_poll(thismsg); // if not ref_back, poll right there.
 
 					if (files_ref_back && fallback && !failure) {
+						//std::cout << "BACK>";
 						auto ennnn = slow_flush_embed( // ref_back
 							embed_link_gen(
 								files_ref_show_ref,
@@ -487,22 +516,24 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 							this_guild,
 							logg
 						);
+						//std::cout << "END.\n";
 
 						handle_poll(ennnn);
 					}
 
 				}
 				else {												// EVERYTHING NOT EXACTLY EMBED
+					//std::cout << "NONFB>";
 					if (slow_flush(to_send, *ch, this_guild, logg)) { // send to chat
-						aegis::rest::aegis_file fp;
-						fp.name = i.filename;
-						for (auto& k : down.read()) fp.data.push_back(k);
+						//std::cout << "S1N>";
 
 						if (auto source = slow_flush(fp, *ch, this_guild, logg); source) { // send big file to chat
+							//std::cout << "S2N>";
 							failure = !source;
 							if (!files_ref_back) handle_poll(source); // no ref? poll there
 
 							if (files_ref_back && fallback && !failure) { // ref, ref.
+								//std::cout << "BACK>";
 								auto ennnn = slow_flush_embed(
 									embed_link_gen(
 										files_ref_show_ref,
@@ -518,6 +549,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 									this_guild,
 									logg
 								);
+								//std::cout << "END.\n";
 
 								handle_poll(ennnn);
 							}
@@ -534,7 +566,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 
 	// HANDLE NEITHER BUT TEXT
 	if (chat_link == 0 && chat_file == 0 && chat_none > 1) { // not link and no file, DEFAULT chat_none				<< NONES || just_delete_source
-		logg->info("Moving/Copying text...");
+		//logg->info("Moving/Copying text...");
 
 		if (content.length()) {
 			aegis::channel* ch = get_channel_safe(chat_none, core);
@@ -550,7 +582,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 							msg.author.id,
 							"https://cdn.discordapp.com/avatars/" + std::to_string(msg.author.id) + "/" + msg.author.avatar + ".png?size=256",
 							msg.author.username + "#" + msg.author.discriminator,
-							content.length() > 2000 ? content.substr(0, 2000) : content
+							content
 						),
 						*ch,
 						this_guild,
@@ -562,7 +594,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 				}
 				else {													// NOT EVERYTHING EMBED
 					std::string to_send = "`" + msg.author.username + "#" + msg.author.discriminator + ":` " + content;
-					if (to_send.length() > 2000) to_send = to_send.substr(0, 2000);
+					to_send = to_send.substr(0, safe_msg_limit);
 
 					thismsg = slow_flush(to_send, *ch, this_guild, logg);
 
@@ -592,7 +624,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 				}
 				/*
 				std::string to_send = "`" + msg.author.username + "#" + msg.author.discriminator + ":` " + content;
-				if (to_send.length() > 2000) to_send = to_send.substr(0, 2000);
+				if (to_send.length() > safe_msg_limit) to_send = to_send.substr(0, safe_msg_limit);
 
 				if (auto thismsg = slow_flush(to_send, *ch, this_guild, logg); thismsg) {
 					failure = false;
@@ -626,7 +658,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 
 	// CLEANUP
 	if (chat_link || chat_file || chat_none) {
-		logg->info("Cleaning up original message...");
+		//logg->info("Cleaning up original message...");
 
 		std::this_thread::yield();
 		for (size_t tries = 0; tries < 7; tries++) {
@@ -638,7 +670,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 						std::this_thread::yield();
 					}
 					tries = 7;
-					logg->info("Cleaned up.");
+					//logg->info("Cleaned up.");
 					break;
 				}
 				else logg->error("[!] Guild #{} can't delete source message.", this_guild);
@@ -661,7 +693,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 		}
 	}
 
-	logg->info("Handled message.");
+	//logg->info("Handled message.");
 }
 
 
@@ -704,7 +736,9 @@ void GuildHandle::command(std::vector<std::string> args, aegis::channel& buck)
 			"- embedall <id> - enables embed to every message (make sure links permission is set; these commands won't be embed). <id> is the chat where it will send raw files. (* = clear)\n"
 			"- delallconfig - removes ALL configuration in this chat\n"
 			"- link <id> - set default link redirect (* = clear)\n"
-			"- file <id> - set default file redirect (* = clear)\n"
+			"- file <id> - set default file redirect (* = clear)\n```",
+
+			"```md\n"
 			"- text <id> - set default text redirect (if not file nor link; * = clear)\n"
 			"- link redirback - after cut (if cut), create an embed-ref? (switch)\n"
 			"- file redirback - after cut (if cut), create an embed-ref? (switch)\n"
@@ -1573,21 +1607,23 @@ GuildHandle::~GuildHandle()
 
 void GuildHandle::end()
 {
-	if (keep_run) {
+	/*if (keep_run) {
 		keep_run = false;
 		if (hs_thr.joinable()) hs_thr.join();
 		save_settings();
-	}
+	}*/
+	save_settings();
 }
 
 GuildHandle& GuildHandle::start()
 {
-	if (!keep_run) {
+	/*if (!keep_run) {
 		load_settings();
 
 		keep_run = true;
 		hs_thr = std::thread([&] {while (keep_run) { if (hs.task()) { logg->info("Tasked once."); } else { std::this_thread::sleep_for(std::chrono::milliseconds(250)); std::this_thread::yield(); } }});
-	}
+	}*/
+	load_settings();
 	return *this;
 }
 
@@ -1607,65 +1643,63 @@ bool GuildHandle::amI(aegis::snowflake id)
 
 void GuildHandle::handle(aegis::channel& src, aegis::gateway::objects::message m)
 {
-	size_t cc = 0;
-	aegis::channel* src_p = nullptr;
+	try {
+		size_t cc = 0;
+		aegis::channel* src_p = nullptr;
 
-	for (src_p = nullptr; !src_p; src_p = core->channel_create(src.get_id())) {
-		if (++cc > 20) {
-			logg->critical("FATAL ERROR HANDLING INPUT. CAN'T FIND CHANNEL AFTER 10 TRIES");
-		}
-		else {
-			std::this_thread::sleep_for(std::chrono::milliseconds(200));
-			std::this_thread::yield();
-		}
-	}
-
-	auto get_content = m.get_content();
-	auto get_guild_id = m.get_guild_id();
-	auto get_user_id = m.author.id;
-	auto get_id = m.get_id();
-
-	hs.add([&, get_content, get_guild_id, get_user_id, get_id, src_p, m] {
-		try {
-			if (get_content.find(main_cmd) == 0 || ((data.command_alias.length() > 0) && get_content.find(data.command_alias) == 0)) {
-
-				auto userr = core->user_create(get_user_id);
-				auto guildd = core->guild_create(get_guild_id, &core->get_shard_by_guild(get_guild_id));
-
-				if (!has_admin_rights(*guildd, *userr)) { // adm/owner/me
-					slow_flush("You have no permission.", *src_p, guildid, logg);
-
-					auto mmm = src_p->delete_message(get_id);
-					while (!mmm.available()) std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
-					return;
-				}
-				size_t start = get_content.find(main_cmd) == 0 ? main_cmd.length() : data.command_alias.size();
-
-				std::vector<std::string> arguments;
-
-				arguments.push_back(main_cmd);
-
-				const std::string& slice = get_content;
-				{
-					std::string buf;
-					for (size_t p = start; p < slice.length(); p++) {
-						auto& i = slice[p];
-						if (i != ' ') buf += slice[p];
-						else if (!buf.empty()) arguments.push_back(std::move(buf));
-					}
-					if (!buf.empty()) arguments.push_back(std::move(buf));
-				}
-				command(arguments, *src_p);
+		for (src_p = nullptr; !src_p; src_p = core->channel_create(src.get_id())) {
+			if (++cc > 20) {
+				logg->critical("FATAL ERROR HANDLING INPUT. CAN'T FIND CHANNEL AFTER 10 TRIES");
 			}
 			else {
-				data.chats[src_p->get_id()].handle_message(core, m);
+				std::this_thread::sleep_for(std::chrono::milliseconds(200));
+				std::this_thread::yield();
 			}
 		}
-		catch (...) {
-			logg->critical("FATAL ERROR HANDLING INPUT.");
+
+		auto get_content = m.get_content();
+		auto get_guild_id = m.get_guild_id();
+		auto get_user_id = m.author.id;
+		auto get_id = m.get_id();
+
+		if (get_content.find(main_cmd) == 0 || ((data.command_alias.length() > 0) && get_content.find(data.command_alias) == 0)) {
+
+			auto userr = core->user_create(get_user_id);
+			auto guildd = core->guild_create(get_guild_id, &core->get_shard_by_guild(get_guild_id));
+
+			if (!has_admin_rights(*guildd, *userr)) { // adm/owner/me
+				slow_flush("You have no permission.", *src_p, guildid, logg);
+
+				auto mmm = src_p->delete_message(get_id);
+				while (!mmm.available()) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+				return;
+			}
+			size_t start = get_content.find(main_cmd) == 0 ? main_cmd.length() : data.command_alias.size();
+
+			std::vector<std::string> arguments;
+
+			arguments.push_back(main_cmd);
+
+			const std::string& slice = get_content;
+			{
+				std::string buf;
+				for (size_t p = start; p < slice.length(); p++) {
+					auto& i = slice[p];
+					if (i != ' ') buf += slice[p];
+					else if (!buf.empty()) arguments.push_back(std::move(buf));
+				}
+				if (!buf.empty()) arguments.push_back(std::move(buf));
+			}
+			command(arguments, *src_p);
 		}
-	});	
+		else {
+			data.chats[src_p->get_id()].handle_message(core, m);
+		}
+	}
+	catch (...) {
+		logg->critical("FATAL ERROR HANDLING INPUT.");
+	}
 }
 
 void GuildHandle::handle(aegis::channel& ch, const unsigned long long mid, aegis::gateway::objects::emoji e)
@@ -1697,15 +1731,15 @@ void GuildHandle::handle(aegis::channel& ch, const unsigned long long mid, aegis
 
 			if (user_c == e.user && user_c) {
 				if (!e.id && e_end == delete_emoji) {
-					logg->info("Emoji: got DELETE MESSAGE.");
+					//logg->info("Emoji: got DELETE MESSAGE.");
 					ch.delete_message(msg.get_id());
 				}
 				else if (!e.id && e_end == recycle_emoji) {
-					logg->info("Emoji: got DEL REACTIONS.");
+					//logg->info("Emoji: got DEL REACTIONS.");
 					ch.delete_all_reactions(msg.get_id());
 				}
 				else {
-					logg->info("Emoji: got ADD.");
+					//logg->info("Emoji: got ADD.");
 					ch.create_reaction(msg.get_id(), 
 						e.id ? ((e.animated ? "a:" : "") +  e.name + ":" + std::to_string(e.id)) : (transformWeirdo(e.name))
 					);
