@@ -34,7 +34,7 @@ int main()
 		});*/
 
 	std::shared_ptr<spdlog::logger> logg = thebot->log;
-	logg->info("[!] Bot has started.");
+	logg->info("Bot has started.");
 
 
 	// join in guild
@@ -42,7 +42,7 @@ int main()
 		if (ignore_all_ending_lmao) return;
 		nolock([&] {
 
-			logg->info("[!] Joined/Connected Guild #{} ({}) from {}", obj.guild.id, obj.guild.name, obj.guild.region);
+			logg->info("Joined/Connected Guild #{} ({}) from {}", obj.guild.id, obj.guild.name, obj.guild.region);
 
 			guilds_m.lock();
 			for (size_t p = 0; p < guilds.size(); p++) {
@@ -62,7 +62,7 @@ int main()
 	thebot->set_on_guild_delete([&](aegis::gateway::events::guild_delete obj) {
 		if (ignore_all_ending_lmao) return;
 		nolock([&] {
-			logg->info("[!] Left Guild #{}", obj.guild_id);
+			logg->info("Left Guild #{}", obj.guild_id);
 
 			std::lock_guard<std::mutex> luck(guilds_m);
 			for (size_t p = 0; p < guilds.size(); p++) {
@@ -91,7 +91,7 @@ int main()
 				}
 			}
 
-			logg->info("[!] Got new message from unknown source?! Creating Guild #{}...", obj.msg.get_guild_id());
+			logg->info("Got new message from unknown source?! Creating Guild #{}...", obj.msg.get_guild_id());
 
 			guilds.emplace_back(std::make_shared<GuildHandle>(thebot, obj.msg.get_guild_id()));
 
@@ -118,7 +118,7 @@ int main()
 				}
 			}
 
-			logg->info("[!] Got new message from unknown source?! Creating Guild #{}...", obj.msg.get_guild_id());
+			logg->info("Got new message from unknown source?! Creating Guild #{}...", obj.msg.get_guild_id());
 
 			guilds.emplace_back(std::make_unique<GuildHandle>(thebot, obj.msg.get_guild_id()));
 
@@ -146,13 +146,13 @@ int main()
 						ch = thebot->channel_create(obj.channel_id);
 					}
 					if (ch) cpy->handle(*ch, obj.message_id, obj.emoji);
-					else logg->error("[!] Guild #{} failed to create channel to handle emoji.", obj.guild_id);
+					else logg->error("Guild #{} failed to create channel to handle emoji.", obj.guild_id);
 
 					return;
 				}
 			}
 
-			logg->info("[!] Got new message from unknown source?! Creating Guild #{}...", obj.guild_id);
+			logg->info("Got new message from unknown source?! Creating Guild #{}...", obj.guild_id);
 
 			guilds.emplace_back(std::make_shared<GuildHandle>(thebot, obj.guild_id));
 
@@ -193,8 +193,28 @@ int main()
 		});
 
 	std::string smth;
-	while (smth != "exit") std::cin >> smth;
-	logg->info("[!] Bot is shutting down...");
+	while (smth.find("exit") != 0) {
+		std::getline(std::cin, smth);
+
+		if (smth.find("list") == 0) {
+			std::string combo;
+			logg->info("Processing list...");
+			{
+				std::lock_guard<std::mutex> luck(guilds_m);
+				std::lock_guard<std::shared_mutex> luck2(thebot->get_guild_mutex());
+				auto& cpyy = thebot->get_guild_map();			
+				for (auto& i : guilds) {
+					for (auto& j : cpyy) {
+						if (i->amI(j.first)) {
+							combo += "- \"" + j.second->get_name() + "\" from \"" + j.second->get_region() + "\"\n";
+						}
+					}
+				}
+			}
+			logg->info("List: \n{}", combo);
+		}
+	}
+	logg->info("Bot is shutting down...");
 
 	ignore_all_ending_lmao = true;
 
@@ -211,7 +231,7 @@ int main()
 	if (here_lol.joinable()) here_lol.join();
 	thebot.reset();
 
-	std::cout << "[!] Ended bot entirely." << std::endl;
+	std::cout << "Ended bot entirely." << std::endl;
 
 	return 0;
 }

@@ -61,7 +61,7 @@ aegis::channel* chat_config::get_channel_safe(unsigned long long ch, std::shared
 			}
 		}
 		catch (aegis::error e) {
-			logg->error("[!] Exception at Guild #{}: {}.", this_guild_orig, e);
+			logg->error("Exception at Guild #{}: {}.", this_guild_orig, e);
 			logg->warn("[!][{}/10] Guild #{} will try to find channel #{} again in 5 second.", tries + 1, this_guild_orig, ch);
 
 			std::this_thread::yield();
@@ -69,7 +69,7 @@ aegis::channel* chat_config::get_channel_safe(unsigned long long ch, std::shared
 			std::this_thread::yield();
 		}
 		catch (std::exception e) {
-			logg->error("[!] Exception at Guild #{}: {}.", this_guild_orig, e.what());
+			logg->error("Exception at Guild #{}: {}.", this_guild_orig, e.what());
 			logg->warn("[!][{}/10] Guild #{} will try to find channel #{} again in 5 second.", tries + 1, this_guild_orig, ch);
 
 			std::this_thread::yield();
@@ -77,7 +77,7 @@ aegis::channel* chat_config::get_channel_safe(unsigned long long ch, std::shared
 			std::this_thread::yield();
 		}
 	}
-	logg->error("[!] Guild #{} couldn't find channel #{}.", this_guild_orig, ch);
+	logg->error("Guild #{} couldn't find channel #{}.", this_guild_orig, ch);
 	std::this_thread::yield();
 	std::this_thread::sleep_for(std::chrono::seconds(1));
 	std::this_thread::yield();
@@ -92,7 +92,10 @@ nlohmann::json chat_config::embed_link_gen(const bool show_link, const unsigned 
 	j["color"] = default_color;
 	j["author"]["name"] = ustr;
 	j["author"]["icon_url"] = uurl;
-	if (show_user_thumbnail) j["thumbnail"]["url"] = uurl;
+	if (show_user_thumbnail) {
+		if (!overwrite_thumbnail.empty()) j["thumbnail"]["url"] = overwrite_thumbnail;
+		else j["thumbnail"]["url"] = uurl;
+	}
 	j["footer"]["text"] = std::to_string(uid);
 
 	if (show_link) {
@@ -121,10 +124,19 @@ void chat_config::handle_poll(slowflush_end& e) const
 {
 	if (!e.good() || !autopoll) return;
 
-	auto fuu = e.create_reaction("%F0%9F%91%8D");
-	while (!fuu.available()) std::this_thread::sleep_for(std::chrono::milliseconds(50));
-	auto fuu2 = e.create_reaction("%F0%9F%91%8E");
-	while (!fuu2.available()) std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	if (poll_emoji_overwrite.size()) {
+		for (auto& i : poll_emoji_overwrite) {
+			e.create_reaction(i);
+		}
+	}
+	else {
+		e.create_reaction("%F0%9F%91%8D");
+		e.create_reaction("%F0%9F%91%8E");
+		//auto fuu = e.create_reaction("%F0%9F%91%8D");
+		//while (!fuu.available()) std::this_thread::sleep_for(std::chrono::milliseconds(50));
+		//auto fuu2 = e.create_reaction("%F0%9F%91%8E");
+		//while (!fuu2.available()) std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	}
 }
 
 std::string chat_config::_fix_content(const std::string& str) const
@@ -163,11 +175,20 @@ void chat_config::load(nlohmann::json j, unsigned long long guild)
 	if (j.count("dont_use_md") && !j["dont_use_md"].is_null())
 		dont_use_md = j["dont_use_md"].get<bool>();
 
+	if (j.count("use_regex") && !j["use_regex"].is_null())
+		use_regex = j["use_regex"].get<bool>();
+
 	if (j.count("autopoll") && !j["autopoll"].is_null())
 		autopoll = j["autopoll"].get<bool>();
 
+	if (j.count("case_sensitive") && !j["case_sensitive"].is_null())
+		case_sensitive = j["case_sensitive"].get<bool>();
+
 	if (j.count("embed_fallback") && !j["embed_fallback"].is_null())
 		embed_fallback = j["embed_fallback"].get<unsigned long long>();
+
+	if (j.count("overwrite_thumbnail") && !j["overwrite_thumbnail"].is_null())
+		overwrite_thumbnail = j["overwrite_thumbnail"].get<std::string>();
 
 
 	if (j.count("links") && !j["links"].is_null())
@@ -212,6 +233,10 @@ void chat_config::load(nlohmann::json j, unsigned long long guild)
 		for (const auto& _field : j["not_link_or_file_overwrite_contains"])
 			nlf_overwrite_contains.push_back(_field);
 	}
+	if (j.count("poll_emoji_overwrite") && !j["poll_emoji_overwrite"].is_null()) {
+		for (const auto& _field : j["poll_emoji_overwrite"])
+			poll_emoji_overwrite.push_back(_field);
+	}
 }
 
 nlohmann::json chat_config::export_config()
@@ -221,7 +246,10 @@ nlohmann::json chat_config::export_config()
 	j["show_user_thumbnail"] = show_user_thumbnail;
 	j["dont_use_md"] = dont_use_md;
 	j["autopoll"] = autopoll;
+	j["case_sensitive"] = case_sensitive;
+	j["use_regex"] = use_regex;
 	j["embed_fallback"] = embed_fallback;
+	j["overwrite_thumbnail"] = overwrite_thumbnail;
 
 	j["links"] = links_orig;
 	j["files"] = files_orig;
@@ -241,6 +269,8 @@ nlohmann::json chat_config::export_config()
 		j["files_overwrite_contains"].push_back(_field);
 	for (const auto& _field : nlf_overwrite_contains)
 		j["not_link_or_file_overwrite_contains"].push_back(_field);
+	for (const auto& _field : poll_emoji_overwrite)
+		j["poll_emoji_overwrite"].push_back(_field);
 
 	return j;
 }
@@ -252,7 +282,10 @@ chat_config& chat_config::operator=(const chat_config& cc)
 	show_user_thumbnail = cc.show_user_thumbnail;
 	dont_use_md = cc.dont_use_md;
 	autopoll = cc.autopoll;
+	case_sensitive = cc.case_sensitive;
+	use_regex = cc.use_regex;
 	embed_fallback = cc.embed_fallback;
+	overwrite_thumbnail = cc.overwrite_thumbnail;
 
 	links_orig = cc.links_orig;
 	files_orig = cc.files_orig;
@@ -269,6 +302,7 @@ chat_config& chat_config::operator=(const chat_config& cc)
 	for (auto& i : cc.link_overwrite_contains) link_overwrite_contains.push_back(i);
 	for (auto& i : cc.files_overwrite_contains) files_overwrite_contains.push_back(i);
 	for (auto& i : cc.nlf_overwrite_contains) nlf_overwrite_contains.push_back(i);
+	for (auto& i : cc.poll_emoji_overwrite) poll_emoji_overwrite.push_back(i);
 
 	return *this;
 }
@@ -312,17 +346,30 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 	}
 
 	content = _fix_content(content);
+	auto content_comp = content;
+	if (!case_sensitive) {
+		for (auto& i : content_comp) i = std::tolower(i);
+	}
 
 
 	// >> LINK
-	if (std::regex_search(content, regex_link)) {
+	if (std::regex_search(content_comp, regex_link)) {
 		//logg->info("Got link. Handling...");
 
 		std::lock_guard<std::mutex> luck(mute);
 		for (auto& i : link_overwrite_contains) {
-			if (content.find(i.first) != std::string::npos) {
-				chat_link = i.second;
-				break;
+			if (use_regex) {
+				std::regex rex(i.first);
+				if (std::regex_search(content_comp, rex)) {
+					chat_link = i.second;
+					break;
+				}
+			}
+			else {
+				if (content_comp.find(i.first) != std::string::npos) {
+					chat_link = i.second;
+					break;
+				}
 			}
 		}
 		if (!chat_link) {
@@ -337,14 +384,21 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 		auto& at = msg.attachments[0];
 		std::lock_guard<std::mutex> luck(mute);
 		for (auto& i : files_overwrite_contains) {
-			if (at.filename.rfind(i.first) + i.first.length() == at.filename.length()) {
-				chat_file = i.second;
-				break;
+
+			auto at_comp = at.filename;
+			if (!case_sensitive) {
+				for (auto& i : at_comp) i = std::tolower(i);
 			}
-		}
-		if (!chat_file) {
-			for (auto& i : files_overwrite_contains) {
-				if (at.filename.find(i.first) != std::string::npos) {
+
+			if (use_regex) {
+				std::regex rex(i.first);
+				if (std::regex_search(at_comp, rex)) {
+					chat_file = i.second;
+					break;
+				}
+			}
+			else {
+				if (at_comp.rfind(i.first) + i.first.length() == at_comp.length()) {
 					chat_file = i.second;
 					break;
 				}
@@ -360,9 +414,18 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 		//logg->info("Got not link nor file. Handling...");
 
 		for (auto& i : nlf_overwrite_contains) {
-			if (content.find(i.first) != std::string::npos) {
-				chat_none = i.second;
-				break;
+			if (use_regex) {
+				std::regex rex(i.first);
+				if (std::regex_search(content_comp, rex)) {
+					chat_none = i.second;
+					break;
+				}
+			}
+			else {
+				if (content_comp.find(i.first) != std::string::npos) {
+					chat_none = i.second;
+					break;
+				}
 			}
 		}
 		if (!chat_none) {
@@ -452,7 +515,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 			Downloader down;
 			down.getASync(i.url.c_str());
 
-			//logg->info("[!] Guild #{} is downloading {}...", this_guild, i.filename);
+			//logg->info("Guild #{} is downloading {}...", this_guild, i.filename);
 
 			while (!down.ended()) {
 				std::this_thread::yield();
@@ -461,11 +524,11 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 
 
 			if (down.read().size() >= MAX_FILE_SIZE) {
-				logg->info("[!] Guild #{} can't copy download {}. (size: {} byte(s))", this_guild, i.filename, down.read().size());
+				logg->info("Guild #{} can't copy download {}. (size: {} byte(s))", this_guild, i.filename, down.read().size());
 				failure = 2;
 			}
 			else {
-				logg->info("[!] Guild #{} downloaded {}. (size: {} byte(s))", this_guild, i.filename, down.read().size());
+				logg->info("Guild #{} downloaded {}. (size: {} byte(s))", this_guild, i.filename, down.read().size());
 				aegis::rest::aegis_file fp;
 				fp.name = i.filename;
 				std::this_thread::sleep_for(std::chrono::milliseconds(20));
@@ -622,32 +685,6 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 
 					handle_poll(ennnn);
 				}
-				/*
-				std::string to_send = "`" + msg.author.username + "#" + msg.author.discriminator + ":` " + content;
-				if (to_send.length() > safe_msg_limit) to_send = to_send.substr(0, safe_msg_limit);
-
-				if (auto thismsg = slow_flush(to_send, *ch, this_guild, logg); thismsg) {
-					failure = false;
-
-					if (nlf_ref_back && fallback) {
-						auto ennnn = slow_flush_embed(
-							embed_link_gen(
-								nlf_ref_show_ref,
-								chat_none,
-								thismsg.get_id(),
-								msg.author.id,
-								"https://cdn.discordapp.com/avatars/" + std::to_string(msg.author.id) + "/" + msg.author.avatar + ".png?size=256",
-								msg.author.username + "#" + msg.author.discriminator,
-								content.length() > str_max_len_embed ? content.substr(0, str_max_len_embed - 3) + "..." : content
-							),
-							*fallback,
-							this_guild,
-							logg
-						);
-
-						handle_poll(ennnn);
-					}
-				}*/
 			}
 			if (failure && fallback) {
 				slow_flush("Failed to move your message.", *fallback, this_guild, logg);
@@ -673,7 +710,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 					//logg->info("Cleaned up.");
 					break;
 				}
-				else logg->error("[!] Guild #{} can't delete source message.", this_guild);
+				else logg->error("Guild #{} can't delete source message.", this_guild);
 			}
 			catch (aegis::error e) {
 				logg->error("[!][{}/7] Guild #{} delete_message couldn't delete message. Got error: {}.", tries + 1, this_guild, e);
@@ -729,30 +766,34 @@ void GuildHandle::command(std::vector<std::string> args, aegis::channel& buck)
 			"- admintag add/remove <id> - allow or not a tag to run these commands\n```",
 
 			"```md\n"
-			"# Local:\n"
-			"- showuserthumbnail - enables/disables user big thumbnail\n"
-			"- dontusemd - enables/disables the `code block` inside embeds\n"
+			"# Local: (* in most cases resets value)\n"
+			"- thumbnail - enables/disables the thumbnail\n"
+			"- regex - enables/disables filters as REGEX.\n"
+			"- casesensitive - enables/disables case sensitivity.\n"
+			"- customthumbnail <url> - enables thumbnail & set fixed thumbnail\n"
+			"- automd - enables/disables the `code block` inside embeds\n"
 			"- autopoll - enables/disables auto thumbsup/down reaction\n"
-			"- embedall <id> - enables embed to every message (make sure links permission is set; these commands won't be embed). <id> is the chat where it will send raw files. (* = clear)\n"
-			"- delallconfig - removes ALL configuration in this chat\n"
+			"- custompollemojis <emoji ...> - if autopoll, what emojis to automatically react? (overwrites previous settings; if no arguments, resets to default)\n"
+			"- embedall <id> - enables embed to every message (make sure links permission is set). <id> is the chat where it will send raw files.\n"
+			"- delchatconfig - removes ALL configuration in this chat\n"
 			"- link <id> - set default link redirect (* = clear)\n"
 			"- file <id> - set default file redirect (* = clear)\n```",
 
 			"```md\n"
-			"- text <id> - set default text redirect (if not file nor link; * = clear)\n"
+			"- text <id> - set default text redirect (if not file nor link)\n"
 			"- link redirback - after cut (if cut), create an embed-ref? (switch)\n"
 			"- file redirback - after cut (if cut), create an embed-ref? (switch)\n"
 			"- text redirback - after cut (if cut), create an embed-ref? (switch)\n"
 			"- link redirbacklink - adds a link to the message (redirback) (switch)\n"
 			"- file redirbacklink - adds a link to the message (redirback) (switch)\n"
 			"- text redirbacklink - adds a link to the message (redirback) (switch)\n"
-			"- specific link <contains> <id> - if link has <contains>, redirect to <id> (if <id> is 0, it will only delete the source)\n"
-			"- specific file <contains> <id> - if file has <contains>, redirect to <id> (if <id> is 0, it will only delete the source)\n"
-			"- specific text <contains> <id> - if text has <contains>, redirect to <id> (not file/link only) (if <id> is 0, it will only delete the source)\n"
+			"- specific link <contains|regex> <id> - if link has <contains|regex>, redirect to <id> (if <id> is 0, it will only delete the source)\n"
+			"- specific file <contains|regex> <id> - if file has <contains|regex>, redirect to <id> (if <id> is 0, it will only delete the source)\n"
+			"- specific text <contains|regex> <id> - if text has <contains|regex>, redirect to <id> (not file/link only) (if <id> is 0, it will only delete the source)\n"
 			"- specific remove * * - removes ALL specific rules (yes, two * *, one means any entry, second means any in those entries)\n"
-			"- specific remove link <contains> - remove a rule set earlier (pro tip: * clear everything)\n"
-			"- specific remove file <contains> - remove a rule set earlier (pro tip: * clear everything)\n"
-			"- specific remove text <contains> - remove a rule set earlier (pro tip: * clear everything)\n```"
+			"- specific remove link <contains|regex> - remove a rule set earlier (pro tip: * clear everything)\n"
+			"- specific remove file <contains|regex> - remove a rule set earlier (pro tip: * clear everything)\n"
+			"- specific remove text <contains|regex> - remove a rule set earlier (pro tip: * clear everything)\n```"
 		};
 
 		for (auto& aaa : msg_pack) {
@@ -760,715 +801,869 @@ void GuildHandle::command(std::vector<std::string> args, aegis::channel& buck)
 		}
 	};
 
-	switch (len) {
-	case 2:
+	// 0 = first arg (arg[1])
+	std::function<bool(const size_t, std::string&)> readarg = [&](const size_t p, std::string& s) {
+		if (p + 1 >= args.size()) return false;
+		s = args[p + 1];
+		return true;
+	};
+
 	{
-		auto& yo = args[1];
+		// // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // //
+		// // // // // // // // // // // // // // // / 01 ARGS / // // // // // // // // // // // // // // //
+		// // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // //
 
-		if (yo == "debug") {
-			std::string uh = gen_json().dump(2);
-			std::string slicu;
+		std::string yo;
 
-			for (size_t p = 0; p < uh.size(); p++) {
-				slicu += uh[p];
-				if (slicu.size() == 1900) {
+
+		if (readarg(0, yo)) {
+
+			// -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > DEBUG
+			if (yo == "debug") {
+				std::string uh = gen_json().dump(2);
+				std::string slicu;
+
+				for (size_t p = 0; p < uh.size(); p++) {
+					slicu += uh[p];
+					if (slicu.size() == 1900) {
+						slow_flush("```\n" + slicu + "```", buck, guildid, logg);
+						slicu.erase();
+					}
+				}
+				if (slicu.size() > 0) {
 					slow_flush("```\n" + slicu + "```", buck, guildid, logg);
 					slicu.erase();
 				}
-			}
-			if (slicu.size() > 0) {
-				slow_flush("```\n" + slicu + "```", buck, guildid, logg);
-				slicu.erase();
+
+				well_done = true;
 			}
 
-			well_done = true;
-		}
-		else if (yo == "debughere") {
-			std::string uh;
-			{
-				std::lock_guard<std::mutex> luck_me(data.mut);
-				auto ch_id = buck.get_id();
-				auto& friendo = data.chats[ch_id];
-				std::lock_guard<std::mutex> luck(friendo.mute);
+			// -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > DEBUGHERE
+			else if (yo == "debughere") {
+				std::string uh;
+				{
+					std::lock_guard<std::mutex> luck_me(data.mut);
+					auto ch_id = buck.get_id();
+					auto& friendo = data.chats[ch_id];
+					std::lock_guard<std::mutex> luck(friendo.mute);
 
-				uh = friendo.export_config().dump(2);
-			}
-			std::string slicu;
+					uh = friendo.export_config().dump(2);
+				}
+				std::string slicu;
 
-			for (size_t p = 0; p < uh.size(); p++) {
-				slicu += uh[p];
-				if (slicu.size() == 1900) {
+				for (size_t p = 0; p < uh.size(); p++) {
+					slicu += uh[p];
+					if (slicu.size() == 1900) {
+						slow_flush("```\n" + slicu + "```", buck, guildid, logg);
+						slicu.erase();
+					}
+				}
+				if (slicu.size() > 0) {
 					slow_flush("```\n" + slicu + "```", buck, guildid, logg);
 					slicu.erase();
 				}
-			}
-			if (slicu.size() > 0) {
-				slow_flush("```\n" + slicu + "```", buck, guildid, logg);
-				slicu.erase();
+
+				well_done = true;
 			}
 
-			well_done = true;
-		}
-		else if (yo == "autopoll") {
-
-			std::string sending;
-			{
-				std::lock_guard<std::mutex> luck_me(data.mut);
-				auto ch_id = buck.get_id();
-				auto& friendo = data.chats[ch_id];
-				std::lock_guard<std::mutex> luck(friendo.mute);
-
-				friendo.autopoll = !friendo.autopoll;
-				sending = std::string("Autopoll ") + (friendo.autopoll ? "ENABLED" : "DISABLED");
-				save = true;
-			}
-			if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
-
-			well_done = true;
-		}
-		else if (yo == "dontusemd") {
-
-			std::string sending;
-			{
-				std::lock_guard<std::mutex> luck_me(data.mut);
-				auto ch_id = buck.get_id();
-				auto& friendo = data.chats[ch_id];
-				std::lock_guard<std::mutex> luck(friendo.mute);
-
-				friendo.dont_use_md = !friendo.dont_use_md;
-				sending = std::string("Automatic block of text is now ") + (!friendo.dont_use_md ? "ENABLED" : "DISABLED");
-				save = true;
-			}
-			if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
-
-			well_done = true;
-		}
-		else if (yo == "showuserthumbnail") {
-
-			std::string sending;
-			{
-				std::lock_guard<std::mutex> luck_me(data.mut);
-				auto ch_id = buck.get_id();
-				auto& friendo = data.chats[ch_id];
-				std::lock_guard<std::mutex> luck(friendo.mute);
-
-				friendo.show_user_thumbnail = !friendo.show_user_thumbnail;
-				sending = std::string("User thumbnail in embed is now ") + (friendo.show_user_thumbnail ? "ENABLED" : "DISABLED");
-				save = true;
-			}
-			if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
-
-			well_done = true;
-		}
-		else if (yo == "delallconfig") {
-			std::string sending;
-			{
-				std::lock_guard<std::mutex> luck_me(data.mut);
-				auto ch_id = buck.get_id();
-
-				
-				for (auto it = data.chats.begin(); it != data.chats.end(); it++) {
-					if ((*it).first == ch_id) {
-						data.chats.erase(it);
-						break;
-					}
-				}
-
-				sending = "Cleaned up ALL rulesets and default rules of this chat.";
-				save = true;
-			}
-			if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
-
-			well_done = true;
-		}
-	}
-		break;
-	case 3: // <cmd> { alias, link, file, text } <id>
-	{
-		auto& yo = args[1];
-		auto& res = args[2];
-
-		if (yo == "alias") { // GLOBAL																			<< lsw/bb alias <id>
-			{
-				std::lock_guard<std::mutex> luck_me(data.mut);
-				data.command_alias = res;
-			}
-			slow_flush("Has set " + res + " as command alias successfully.", buck, guildid, logg);
-			save = true;
-
-			well_done = true;
-		}
-		else if (yo == "embedall") {
-			std::string sending;
-			{
-				std::lock_guard<std::mutex> luck_me(data.mut);
-				auto ch_id = buck.get_id();
-				auto& friendo = data.chats[ch_id];
-				std::lock_guard<std::mutex> luck(friendo.mute);
-
-				if (res == "*") {
-					friendo.embed_fallback = 0;
-					sending = "Removed embed fallback successfully.";
-					save = true;
-				}
-				else {
-					while (res.length() > 0) {
-						if (!std::isdigit(res[0])) { // not a number
-							res.erase(res.begin());
-						}
-						else break;
-					}
-
-					unsigned long long yaoo;
-
-					if (sscanf_s(res.c_str(), "%llu", &yaoo) == 1) {
-						friendo.embed_fallback = yaoo;
-						sending = "Has set <#" + std::to_string(yaoo) + "> as embed fallback successfully.";
-						save = true;
-					}
-					else {
-						sending = "Failed to get the ID from your command.";
-					}
-				}
-			}
-			if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
-
-			well_done = true;
-		}
-		else if (yo == "link") { // 																			<< lsw/bb link <id>
-
-			std::string sending;
-			{
-				std::lock_guard<std::mutex> luck_me(data.mut);
-				auto ch_id = buck.get_id();
-				auto& friendo = data.chats[ch_id];
-				std::lock_guard<std::mutex> luck(friendo.mute);
-
-				if (res == "*") {
-					friendo.links_orig = 0;
-					sending = "Removed default link configuration for this chat.";
-					save = true;
-				}
-				else if (res == "redirback") {
-					friendo.link_ref_back = !friendo.link_ref_back;
-					sending = std::string("Ref back set to ") + (friendo.link_ref_back ? "TRUE" : "FALSE");
-					save = true;
-				}
-				else if (res == "redirbacklink") {
-					friendo.link_ref_show_ref = !friendo.link_ref_show_ref;
-					sending = std::string("Link on ref back set to ") + (friendo.link_ref_show_ref ? "TRUE" : "FALSE");
-					save = true;
-				}
-				else {
-					while (res.length() > 0) {
-						if (!std::isdigit(res[0])) { // not a number
-							res.erase(res.begin());
-						}
-						else break;
-					}
-
-					unsigned long long yaoo;
-
-					if (sscanf_s(res.c_str(), "%llu", &yaoo) == 1) {
-						friendo.links_orig = yaoo ? yaoo : 1;
-						if (yaoo) sending = "Has set <#" + std::to_string(yaoo) + "> as global link fallback successfully.";
-						else sending = "Has set to just delete as global link fallback successfully.";
-						save = true;
-					}
-					else {
-						sending = "Failed to get the ID from your command.";
-					}
-				}
-			}			
-			if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
-
-			well_done = true;
-		}
-		else if (yo == "text") { // 																			<< lsw/bb text <id>
-
-			std::string sending;
-			{
-				std::lock_guard<std::mutex> luck_me(data.mut);
-				auto ch_id = buck.get_id();
-				auto& friendo = data.chats[ch_id];
-				std::lock_guard<std::mutex> luck(friendo.mute);
-
-
-				if (res == "*") {
-					friendo.nlf_orig = 0;
-					sending = "Removed default text configuration for this chat.";
-					save = true;
-				}
-				else if (res == "redirback") {
-					friendo.nlf_ref_back = !friendo.nlf_ref_back;
-					sending = std::string("Ref back set to ") + (friendo.nlf_ref_back ? "TRUE" : "FALSE");
-					save = true;
-				}
-				else if (res == "redirbacklink") {
-					friendo.nlf_ref_show_ref = !friendo.nlf_ref_show_ref;
-					sending = std::string("Link on ref back set to ") + (friendo.nlf_ref_show_ref ? "TRUE" : "FALSE");
-					save = true;
-				}
-				else {
-					while (res.length() > 0) {
-						if (!std::isdigit(res[0])) { // not a number
-							res.erase(res.begin());
-						}
-						else break;
-					}
-
-					unsigned long long yaoo;
-
-					if (sscanf_s(res.c_str(), "%llu", &yaoo) == 1) {
-						friendo.nlf_orig = yaoo ? yaoo : 1;
-						if (yaoo) sending = "Has set <#" + std::to_string(yaoo) + "> as global text fallback successfully.";
-						else sending = "Has set to just delete as global text fallback successfully.";
-						save = true;
-					}
-					else {
-						sending = "Failed to get the ID from your command.";
-					}
-				}
-			}			
-			if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
-
-			well_done = true;
-		}
-		else if (yo == "file") { // 																			<< lsw/bb file <id>
-
-			std::string sending;
-			{
-				std::lock_guard<std::mutex> luck_me(data.mut);
-				auto ch_id = buck.get_id();
-				auto& friendo = data.chats[ch_id];
-				std::lock_guard<std::mutex> luck(friendo.mute);
-
-
-				if (res == "*") {
-					friendo.files_orig = 0;
-					sending = "Removed default files configuration for this chat.";
-					save = true;
-				}
-				else if (res == "redirback") {
-					friendo.files_ref_back = !friendo.files_ref_back;
-					sending = std::string("Ref back set to ") + (friendo.files_ref_back ? "TRUE" : "FALSE");
-					save = true;
-				}
-				else if (res == "redirbacklink") {
-					friendo.files_ref_show_ref = !friendo.files_ref_show_ref;
-					sending = std::string("Link on ref back set to ") + (friendo.files_ref_show_ref ? "TRUE" : "FALSE");
-					save = true;
-				}
-				else {
-					while (res.length() > 0) {
-						if (!std::isdigit(res[0])) { // not a number
-							res.erase(res.begin());
-						}
-						else break;
-					}
-
-					unsigned long long yaoo;
-
-					if (sscanf_s(res.c_str(), "%llu", &yaoo) == 1) {
-						friendo.files_orig = yaoo ? yaoo : 1;
-						if (yaoo) sending = "Has set <#" + std::to_string(yaoo) + "> as global file fallback successfully.";
-						else sending = "Has set to just delete as global file fallback successfully.";
-						save = true;
-					}
-					else {
-						sending = "Failed to get the ID from your command.";
-					}
-				}
-			}
-			if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
-
-			well_done = true;
-		}
-	}
-		break;
-	case 4: // <cmd> { admintag add|remove } <id>
-	{
-		auto& yo = args[1];
-		auto& yo2 = args[2];
-		auto& res = args[3];
-
-		if (yo == "admintag") { // GLOBAL																			<< lsw/bb alias <id>
-			
-			if (yo2 == "add") {
+			// -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > AUTOPOLL
+			else if (yo == "autopoll") {
 
 				std::string sending;
 				{
 					std::lock_guard<std::mutex> luck_me(data.mut);
+					auto ch_id = buck.get_id();
+					auto& friendo = data.chats[ch_id];
+					std::lock_guard<std::mutex> luck(friendo.mute);
 
-					while (res.length() > 0) {
-						if (!std::isdigit(res[0])) { // not a number
-							res.erase(res.begin());
+					friendo.autopoll = !friendo.autopoll;
+					sending = std::string("Autopoll ") + (friendo.autopoll ? "ENABLED" : "DISABLED");
+					save = true;
+				}
+				if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
+
+				well_done = true;
+			}
+
+			// -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > CUSTOMPOLLEMOJIS <emoji...>
+			else if (yo == "custompollemojis") {
+
+				std::string sending;
+				{
+					std::lock_guard<std::mutex> luck_me(data.mut);
+					auto ch_id = buck.get_id();
+					auto& friendo = data.chats[ch_id];
+					std::lock_guard<std::mutex> luck(friendo.mute);
+
+					friendo.poll_emoji_overwrite.clear();
+
+					for (size_t p = 2; p < args.size(); p++) {
+						auto cpy = args[p];
+						if (cpy.length() > 2) {
+							if (cpy.front() == '<') cpy.erase(cpy.begin());
+							if (cpy.back() == '>') cpy.pop_back();
 						}
-						else break;
+						if (cpy.length() > 0) {
+							if (cpy.front() != 'a' && cpy.front() != ':') {
+								cpy = transformWeirdo(cpy);
+							}
+							friendo.poll_emoji_overwrite.push_back(cpy);
+						}
 					}
 
-					unsigned long long yaoo;
-					
-					if (sscanf_s(res.c_str(), "%llu", &yaoo) == 1) {
+					if (friendo.poll_emoji_overwrite.size()) sending = "Autopoll now have " + std::to_string(friendo.poll_emoji_overwrite.size()) + " custom emojis set.";
+					else sending = "Autopoll has default emojis set now.";
+					save = true;
+				}
+				if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
 
-						bool already_there = false;
+				well_done = true;
+			}
 
-						for (auto& i : data.admin_tags) {
-							already_there = (i == yaoo);
-							if (already_there) break;
+			// -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > AUTOMD
+			else if (yo == "automd") {
+
+				std::string sending;
+				{
+					std::lock_guard<std::mutex> luck_me(data.mut);
+					auto ch_id = buck.get_id();
+					auto& friendo = data.chats[ch_id];
+					std::lock_guard<std::mutex> luck(friendo.mute);
+
+					friendo.dont_use_md = !friendo.dont_use_md;
+					sending = std::string("Automatic block of text is now ") + (!friendo.dont_use_md ? "ENABLED" : "DISABLED");
+					save = true;
+				}
+				if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
+
+				well_done = true;
+			}
+
+			// -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > THUMBNAIL
+			else if (yo == "thumbnail") {
+
+				std::string sending;
+				{
+					std::lock_guard<std::mutex> luck_me(data.mut);
+					auto ch_id = buck.get_id();
+					auto& friendo = data.chats[ch_id];
+					std::lock_guard<std::mutex> luck(friendo.mute);
+
+					friendo.show_user_thumbnail = !friendo.show_user_thumbnail;
+					sending = std::string("Thumbnail in embed is now ") + (friendo.show_user_thumbnail ? "ENABLED" : "DISABLED");
+					save = true;
+				}
+				if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
+
+				well_done = true;
+			}
+
+			// -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > CASESENSITIVE
+			else if (yo == "casesensitive") {
+
+				std::string sending;
+				{
+					std::lock_guard<std::mutex> luck_me(data.mut);
+					auto ch_id = buck.get_id();
+					auto& friendo = data.chats[ch_id];
+					std::lock_guard<std::mutex> luck(friendo.mute);
+
+					friendo.case_sensitive = !friendo.case_sensitive;
+					sending = std::string("Now regex/find will be ") + (friendo.case_sensitive ? "CASE SENSITIVE" : "NOT CASE SENSITIVE");
+					save = true;
+				}
+				if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
+
+				well_done = true;
+			}
+
+			// -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > REGEX
+			else if (yo == "regex") {
+
+				std::string sending;
+				{
+					std::lock_guard<std::mutex> luck_me(data.mut);
+					auto ch_id = buck.get_id();
+					auto& friendo = data.chats[ch_id];
+					std::lock_guard<std::mutex> luck(friendo.mute);
+
+					friendo.use_regex = !friendo.use_regex;
+					sending = std::string("Regex mode is now ") + (friendo.use_regex ? "ENABLED" : "DISABLED");
+					save = true;
+				}
+				if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
+
+				well_done = true;
+			}
+
+			// -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > DELCHATCONFIG
+			else if (yo == "delchatconfig") {
+				std::string sending;
+				{
+					std::lock_guard<std::mutex> luck_me(data.mut);
+					auto ch_id = buck.get_id();
+
+					for (auto it = data.chats.begin(); it != data.chats.end(); it++) {
+						if ((*it).first == ch_id) {
+							data.chats.erase(it);
+							break;
 						}
+					}
 
-						if (!already_there) {
-							data.admin_tags.push_back(yaoo);
-							sending = "Added <@&" + std::to_string(yaoo) + "> as admin.";
+					sending = "Cleaned up ALL rulesets and default rules of this chat.";
+					save = true;
+				}
+				if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
+
+				well_done = true;
+			}
+
+			// // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // //
+			// // // // // // // // // // // // // // // / 02 ARGS / // // // // // // // // // // // // // // //
+			// // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // //
+
+			// -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > ALIAS <STRING>
+			if (yo == "alias") {
+				std::string res;
+				if (readarg(1, res)) {
+					{
+						std::lock_guard<std::mutex> luck_me(data.mut);
+						data.command_alias = res;
+					}
+					slow_flush("Has set " + res + " as command alias successfully.", buck, guildid, logg);
+					save = true;
+
+					well_done = true;
+				}
+			}
+
+			// -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > CUSTOMTHUMBNAIL <URL|*>
+			else if (yo == "customthumbnail") {
+
+				std::string sending;
+				std::string res;
+				if (readarg(1, res)) {
+					{
+						std::lock_guard<std::mutex> luck_me(data.mut);
+						auto ch_id = buck.get_id();
+						auto& friendo = data.chats[ch_id];
+						std::lock_guard<std::mutex> luck(friendo.mute);
+
+						if (res == "*") {
+							friendo.overwrite_thumbnail.clear();
+							sending = "Removed custom thumbnail successfully.";
+							save = true;
+						}
+						else if (std::regex_search(res, regex_link)) {
+							friendo.overwrite_thumbnail = res;
+							sending = "URL for custom thumbnail successfully set.";
 							save = true;
 						}
 						else {
-							sending = "<@&" + std::to_string(yaoo) + "> already set as admin.";
+							sending = "The argument doesn't seems to be a valid URL.";
 						}
-					}
-					else {
-						sending = "Failed to get the ID from your command.";
 					}
 				}
 				if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
 
 				well_done = true;
 			}
-			else if (yo2 == "remove") {
+
+			// -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > EMBEDALL <CHATID>
+			else if (yo == "embedall") {
 
 				std::string sending;
-				{
-					std::lock_guard<std::mutex> luck_me(data.mut);
+				std::string res;
+				if (readarg(1, res)) {
+					{
+						std::lock_guard<std::mutex> luck_me(data.mut);
+						auto ch_id = buck.get_id();
+						auto& friendo = data.chats[ch_id];
+						std::lock_guard<std::mutex> luck(friendo.mute);
 
-					while (res.length() > 0) {
-						if (!std::isdigit(res[0])) { // not a number
-							res.erase(res.begin());
-						}
-						else break;
-					}
-
-					unsigned long long yaoo;
-					
-					if (sscanf_s(res.c_str(), "%llu", &yaoo) == 1) {
-
-						bool found_there = false;
-
-						for (size_t p = 0; p < data.admin_tags.size(); p++) {
-							if (data.admin_tags[p] == yaoo) {
-								data.admin_tags.erase(data.admin_tags.begin() + p);
-								found_there = true;
-								break;
-							}
-						}
-
-						if (found_there) {
-							data.admin_tags.push_back(yaoo);
-							sending = "Removed <@&" + std::to_string(yaoo) + "> from admin list.";
+						if (res == "*") {
+							friendo.embed_fallback = 0;
+							sending = "Removed embed fallback successfully.";
 							save = true;
 						}
 						else {
-							sending = "<@&" + std::to_string(yaoo) + "> was not an admin.";
+							while (res.length() > 0) {
+								if (!std::isdigit(res[0])) { // not a number
+									res.erase(res.begin());
+								}
+								else break;
+							}
+
+							unsigned long long yaoo;
+
+							if (sscanf_s(res.c_str(), "%llu", &yaoo) == 1) {
+								friendo.embed_fallback = yaoo;
+								sending = "Has set <#" + std::to_string(yaoo) + "> as embed fallback successfully.";
+								save = true;
+							}
+							else {
+								sending = "Failed to get the ID from your command.";
+							}
 						}
-					}
-					else {
-						sending = "Failed to get the ID from your command.", buck, guildid;
 					}
 				}
 				if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
 
 				well_done = true;
+			}
+
+			// -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > LINK <CHATID|STRING>
+			else if (yo == "link") {
+
+				std::string sending;
+				std::string res;
+				if (readarg(1, res)) {
+					{
+						std::lock_guard<std::mutex> luck_me(data.mut);
+						auto ch_id = buck.get_id();
+						auto& friendo = data.chats[ch_id];
+						std::lock_guard<std::mutex> luck(friendo.mute);
+
+						if (res == "*") {
+							friendo.links_orig = 0;
+							sending = "Removed default link configuration for this chat.";
+							save = true;
+						}
+						else if (res == "redirback") {
+							friendo.link_ref_back = !friendo.link_ref_back;
+							sending = std::string("Ref back set to ") + (friendo.link_ref_back ? "TRUE" : "FALSE");
+							save = true;
+						}
+						else if (res == "redirbacklink") {
+							friendo.link_ref_show_ref = !friendo.link_ref_show_ref;
+							sending = std::string("Link on ref back set to ") + (friendo.link_ref_show_ref ? "TRUE" : "FALSE");
+							save = true;
+						}
+						else {
+							while (res.length() > 0) {
+								if (!std::isdigit(res[0])) { // not a number
+									res.erase(res.begin());
+								}
+								else break;
+							}
+
+							unsigned long long yaoo;
+
+							if (sscanf_s(res.c_str(), "%llu", &yaoo) == 1) {
+								friendo.links_orig = yaoo ? yaoo : 1;
+								if (yaoo) sending = "Has set <#" + std::to_string(yaoo) + "> as global link fallback successfully.";
+								else sending = "Has set to just delete as global link fallback successfully.";
+								save = true;
+							}
+							else {
+								sending = "Failed to get the ID from your command.";
+							}
+						}
+					}
+				}
+				if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
+
+				well_done = true;
+			}
+
+			// -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > TEXT <CHATID|STRING>
+			else if (yo == "text") {
+
+				std::string sending;
+				std::string res;
+				if (readarg(1, res)) {
+					{
+						std::lock_guard<std::mutex> luck_me(data.mut);
+						auto ch_id = buck.get_id();
+						auto& friendo = data.chats[ch_id];
+						std::lock_guard<std::mutex> luck(friendo.mute);
+
+
+						if (res == "*") {
+							friendo.nlf_orig = 0;
+							sending = "Removed default text configuration for this chat.";
+							save = true;
+						}
+						else if (res == "redirback") {
+							friendo.nlf_ref_back = !friendo.nlf_ref_back;
+							sending = std::string("Ref back set to ") + (friendo.nlf_ref_back ? "TRUE" : "FALSE");
+							save = true;
+						}
+						else if (res == "redirbacklink") {
+							friendo.nlf_ref_show_ref = !friendo.nlf_ref_show_ref;
+							sending = std::string("Link on ref back set to ") + (friendo.nlf_ref_show_ref ? "TRUE" : "FALSE");
+							save = true;
+						}
+						else {
+							while (res.length() > 0) {
+								if (!std::isdigit(res[0])) { // not a number
+									res.erase(res.begin());
+								}
+								else break;
+							}
+
+							unsigned long long yaoo;
+
+							if (sscanf_s(res.c_str(), "%llu", &yaoo) == 1) {
+								friendo.nlf_orig = yaoo ? yaoo : 1;
+								if (yaoo) sending = "Has set <#" + std::to_string(yaoo) + "> as global text fallback successfully.";
+								else sending = "Has set to just delete as global text fallback successfully.";
+								save = true;
+							}
+							else {
+								sending = "Failed to get the ID from your command.";
+							}
+						}
+					}
+				}
+				if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
+
+				well_done = true;
+			}
+
+			// -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > FILE <CHATID|STRING>
+			else if (yo == "file") {
+
+				std::string sending;
+				std::string res;
+				if (readarg(1, res)) {
+					{
+						std::lock_guard<std::mutex> luck_me(data.mut);
+						auto ch_id = buck.get_id();
+						auto& friendo = data.chats[ch_id];
+						std::lock_guard<std::mutex> luck(friendo.mute);
+
+
+						if (res == "*") {
+							friendo.files_orig = 0;
+							sending = "Removed default files configuration for this chat.";
+							save = true;
+						}
+						else if (res == "redirback") {
+							friendo.files_ref_back = !friendo.files_ref_back;
+							sending = std::string("Ref back set to ") + (friendo.files_ref_back ? "TRUE" : "FALSE");
+							save = true;
+						}
+						else if (res == "redirbacklink") {
+							friendo.files_ref_show_ref = !friendo.files_ref_show_ref;
+							sending = std::string("Link on ref back set to ") + (friendo.files_ref_show_ref ? "TRUE" : "FALSE");
+							save = true;
+						}
+						else {
+							while (res.length() > 0) {
+								if (!std::isdigit(res[0])) { // not a number
+									res.erase(res.begin());
+								}
+								else break;
+							}
+
+							unsigned long long yaoo;
+
+							if (sscanf_s(res.c_str(), "%llu", &yaoo) == 1) {
+								friendo.files_orig = yaoo ? yaoo : 1;
+								if (yaoo) sending = "Has set <#" + std::to_string(yaoo) + "> as global file fallback successfully.";
+								else sending = "Has set to just delete as global file fallback successfully.";
+								save = true;
+							}
+							else {
+								sending = "Failed to get the ID from your command.";
+							}
+						}
+					}
+				}
+				if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
+
+				well_done = true;
+			}
+
+			// // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // //
+			// // // // // // // // // // // // // // // / 03 ARGS / // // // // // // // // // // // // // // //
+			// // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // //
+			std::string yo2;
+			if (readarg(1, yo2)) { // more or eq to 03
+				// -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > ADMINTAG ADD|REMOVE <STRING>
+				if (yo == "admintag") {
+
+					std::string res;
+					if (readarg(2, res)) {
+						if (yo2 == "add") {
+
+							std::string sending;
+							{
+								std::lock_guard<std::mutex> luck_me(data.mut);
+
+								while (res.length() > 0) {
+									if (!std::isdigit(res[0])) { // not a number
+										res.erase(res.begin());
+									}
+									else break;
+								}
+
+								unsigned long long yaoo;
+
+								if (sscanf_s(res.c_str(), "%llu", &yaoo) == 1) {
+
+									bool already_there = false;
+
+									for (auto& i : data.admin_tags) {
+										already_there = (i == yaoo);
+										if (already_there) break;
+									}
+
+									if (!already_there) {
+										data.admin_tags.push_back(yaoo);
+										sending = "Added <@&" + std::to_string(yaoo) + "> as admin.";
+										save = true;
+									}
+									else {
+										sending = "<@&" + std::to_string(yaoo) + "> already set as admin.";
+									}
+								}
+								else {
+									sending = "Failed to get the ID from your command.";
+								}
+							}
+							if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
+
+							well_done = true;
+						}
+						else if (yo2 == "remove") {
+
+							std::string sending;
+							{
+								std::lock_guard<std::mutex> luck_me(data.mut);
+
+								while (res.length() > 0) {
+									if (!std::isdigit(res[0])) { // not a number
+										res.erase(res.begin());
+									}
+									else break;
+								}
+
+								unsigned long long yaoo;
+
+								if (sscanf_s(res.c_str(), "%llu", &yaoo) == 1) {
+
+									bool found_there = false;
+
+									for (size_t p = 0; p < data.admin_tags.size(); p++) {
+										if (data.admin_tags[p] == yaoo) {
+											data.admin_tags.erase(data.admin_tags.begin() + p);
+											found_there = true;
+											break;
+										}
+									}
+
+									if (found_there) {
+										data.admin_tags.push_back(yaoo);
+										sending = "Removed <@&" + std::to_string(yaoo) + "> from admin list.";
+										save = true;
+									}
+									else {
+										sending = "<@&" + std::to_string(yaoo) + "> was not an admin.";
+									}
+								}
+								else {
+									sending = "Failed to get the ID from your command.", buck, guildid;
+								}
+							}
+							if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
+
+							well_done = true;
+						}
+					}
+				}
+			}
+
+			// // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // //
+			// // // // // // // // // // // // // // // / 04 ARGS / // // // // // // // // // // // // // // //
+			// // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // //
+			std::string yo3;
+			if (readarg(2, yo3)) { // more or eq to 03
+				// -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > -- > SPECIFIC LINK|TEXT|FILE|REMOVE ...
+				if (yo == "specific") {
+					std::string res;
+					if (readarg(3, res)) {
+						if (yo2 == "link" && yo3 != "*") {
+
+							std::string sending;
+							{
+								std::lock_guard<std::mutex> luck_me(data.mut);
+								auto ch_id = buck.get_id();
+								auto& friendo = data.chats[ch_id];
+								std::lock_guard<std::mutex> luck(friendo.mute);
+
+								while (res.length() > 0) {
+									if (!std::isdigit(res[0])) { // not a number
+										res.erase(res.begin());
+									}
+									else break;
+								}
+
+								unsigned long long yaoo;
+
+								if (sscanf_s(res.c_str(), "%llu", &yaoo) == 1) {
+
+									bool already_got = false;
+
+									for (auto& h : friendo.link_overwrite_contains) {
+										if (h.first == yo3) {
+											h.second = yaoo ? yaoo : 1;
+											already_got = true;
+											break;
+										}
+									}
+
+									if (!already_got) friendo.link_overwrite_contains.push_back({ yo3, yaoo ? yaoo : 1 });
+
+									if (yaoo) sending = "Added/updated ruleset (link) \"" + yo3 + "\" -> <#" + std::to_string(yaoo) + "> successfully";
+									else sending = "Added/updated ruleset (link) \"" + yo3 + "\" -> DELETE successfully";
+									save = true;
+								}
+								else {
+									sending = "Failed to get the ID from your command.";
+								}
+							}
+							if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
+
+							well_done = true;
+						}
+						else if (yo2 == "text" && yo3 != "*") {
+
+							std::string sending;
+							{
+								std::lock_guard<std::mutex> luck_me(data.mut);
+								auto ch_id = buck.get_id();
+								auto& friendo = data.chats[ch_id];
+								std::lock_guard<std::mutex> luck(friendo.mute);
+
+								while (res.length() > 0) {
+									if (!std::isdigit(res[0])) { // not a number
+										res.erase(res.begin());
+									}
+									else break;
+								}
+
+								unsigned long long yaoo;
+
+								if (sscanf_s(res.c_str(), "%llu", &yaoo) == 1) {
+
+									bool already_got = false;
+
+									for (auto& h : friendo.nlf_overwrite_contains) {
+										if (h.first == yo3) {
+											h.second = yaoo ? yaoo : 1;
+											already_got = true;
+											break;
+										}
+									}
+
+									if (!already_got) friendo.nlf_overwrite_contains.push_back({ yo3, yaoo ? yaoo : 1 });
+
+									if (yaoo) sending = "Added/updated ruleset (text) \"" + yo3 + "\" -> <#" + std::to_string(yaoo) + "> successfully";
+									else sending = "Added/updated ruleset (text) \"" + yo3 + "\" -> DELETE successfully";
+									save = true;
+								}
+								else {
+									sending = "Failed to get the ID from your command.";
+								}
+							}
+							if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
+
+							well_done = true;
+						}
+						else if (yo2 == "file" && yo3 != "*") {
+
+							std::string sending;
+							{
+								std::lock_guard<std::mutex> luck_me(data.mut);
+								auto ch_id = buck.get_id();
+								auto& friendo = data.chats[ch_id];
+								std::lock_guard<std::mutex> luck(friendo.mute);
+
+								while (res.length() > 0) {
+									if (!std::isdigit(res[0])) { // not a number
+										res.erase(res.begin());
+									}
+									else break;
+								}
+
+								unsigned long long yaoo;
+
+								if (sscanf_s(res.c_str(), "%llu", &yaoo) == 1) {
+
+									bool already_got = false;
+
+									for (auto& h : friendo.files_overwrite_contains) {
+										if (h.first == yo3) {
+											h.second = yaoo ? yaoo : 1;
+											already_got = true;
+											break;
+										}
+									}
+
+									if (!already_got) friendo.files_overwrite_contains.push_back({ yo3, yaoo ? yaoo : 1 });
+
+									if (yaoo) sending = "Added/updated ruleset (file) \"" + yo3 + "\" -> <#" + std::to_string(yaoo) + "> successfully";
+									else sending = "Added/updated ruleset (file) \"" + yo3 + "\" -> DELETE successfully";
+									save = true;
+								}
+								else {
+									sending = "Failed to get the ID from your command.";
+								}
+							}
+							if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
+
+							well_done = true;
+						}
+						else if (yo2 == "remove") { // remember * = all
+
+							if (yo3 == "*" && res == "*") {
+
+								std::string sending;
+								{
+									std::lock_guard<std::mutex> luck_me(data.mut);
+									auto ch_id = buck.get_id();
+									auto& friendo = data.chats[ch_id];
+									std::lock_guard<std::mutex> luck(friendo.mute);
+
+									friendo.link_overwrite_contains.clear();
+									friendo.files_overwrite_contains.clear();
+									friendo.nlf_overwrite_contains.clear();
+
+									sending = "Cleaned up ALL rulesets of this chat.";
+									save = true;
+								}
+								if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
+
+								well_done = true;
+							}
+							else if (yo3 == "link") {
+
+								std::string sending;
+								{
+									std::lock_guard<std::mutex> luck_me(data.mut);
+									auto ch_id = buck.get_id();
+									auto& friendo = data.chats[ch_id];
+									std::lock_guard<std::mutex> luck(friendo.mute);
+
+									if (res == "*") {
+										friendo.link_overwrite_contains.clear();
+
+										sending = "Cleaned up ALL LINK rulesets of this chat.";
+										save = true;
+									}
+									else { // contains
+
+										bool found = false;
+
+										for (size_t p = 0; p < friendo.link_overwrite_contains.size(); p++) {
+											if (friendo.link_overwrite_contains[p].first == res) {
+												friendo.link_overwrite_contains.erase(friendo.link_overwrite_contains.begin() + p);
+												found = true;
+												break;
+											}
+										}
+
+										if (found) {
+											sending = "Removed ruleset (link) with key \"" + res + "\" successfully.";
+											save = true;
+										}
+										else {
+											sending = "Can't find any ruleset (link) with key \"" + res + "\".";
+										}
+									}
+								}
+								if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
+
+								well_done = true;
+							}
+							else if (yo3 == "text") {
+
+								std::string sending;
+								{
+									std::lock_guard<std::mutex> luck_me(data.mut);
+									auto ch_id = buck.get_id();
+									auto& friendo = data.chats[ch_id];
+									std::lock_guard<std::mutex> luck(friendo.mute);
+
+									if (res == "*") {
+										friendo.nlf_overwrite_contains.clear();
+
+										sending = "Cleaned up ALL TEXT rulesets of this chat.";
+										save = true;
+									}
+									else { // contains
+
+										bool found = false;
+
+										for (size_t p = 0; p < friendo.nlf_overwrite_contains.size(); p++) {
+											if (friendo.nlf_overwrite_contains[p].first == res) {
+												friendo.nlf_overwrite_contains.erase(friendo.nlf_overwrite_contains.begin() + p);
+												found = true;
+												break;
+											}
+										}
+
+										if (found) {
+											sending = "Removed ruleset (text) with key \"" + res + "\" successfully.";
+											save = true;
+										}
+										else {
+											sending = "Can't find any ruleset (text) with key \"" + res + "\".";
+										}
+									}
+								}
+								if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
+
+								well_done = true;
+							}
+							else if (yo3 == "file") {
+
+								std::string sending;
+								{
+									std::lock_guard<std::mutex> luck_me(data.mut);
+									auto ch_id = buck.get_id();
+									auto& friendo = data.chats[ch_id];
+									std::lock_guard<std::mutex> luck(friendo.mute);
+
+									if (res == "*") {
+										friendo.files_overwrite_contains.clear();
+
+										sending = "Cleaned up ALL FILE rulesets of this chat.";
+										save = true;
+									}
+									else { // contains
+
+										bool found = false;
+
+										for (size_t p = 0; p < friendo.files_overwrite_contains.size(); p++) {
+											if (friendo.files_overwrite_contains[p].first == res) {
+												friendo.files_overwrite_contains.erase(friendo.files_overwrite_contains.begin() + p);
+												found = true;
+												break;
+											}
+										}
+
+										if (found) {
+											sending = "Removed ruleset (file) with key \"" + res + "\" successfully.";
+											save = true;
+										}
+										else {
+											sending = "Can't find any ruleset (file) with key \"" + res + "\".";
+										}
+									}
+								}
+								if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
+
+								well_done = true;
+							}
+
+						}
+					}
+				}
 			}
 		}
-	}
-		break;
-	case 5: // <cmd> { specific [link|file|text <contains> <id>] | [specific remove link|file|text <contains>] } 
-	{
-		auto& yo = args[1];
-		auto& yo2 = args[2];
-		auto& yo3 = args[3];
-		auto& res = args[4];
-
-		if (yo == "specific") {
-			if (yo2 == "link" && yo3 != "*") {
-
-				std::string sending;
-				{
-					std::lock_guard<std::mutex> luck_me(data.mut);
-					auto ch_id = buck.get_id();
-					auto& friendo = data.chats[ch_id];
-					std::lock_guard<std::mutex> luck(friendo.mute);
-
-					while (res.length() > 0) {
-						if (!std::isdigit(res[0])) { // not a number
-							res.erase(res.begin());
-						}
-						else break;
-					}
-
-					unsigned long long yaoo;
-					
-					if (sscanf_s(res.c_str(), "%llu", &yaoo) == 1) {
-
-						bool already_got = false;
-
-						for (auto& h : friendo.link_overwrite_contains) {
-							if (h.first == yo3) {
-								h.second = yaoo ? yaoo : 1;
-								already_got = true;
-								break;
-							}
-						}
-
-						if (!already_got) friendo.link_overwrite_contains.push_back({ yo3, yaoo ? yaoo : 1 });
-
-						if (yaoo) sending = "Added/updated ruleset (link) \"" + yo3 + "\" -> <#" + std::to_string(yaoo) + "> successfully";
-						else sending = "Added/updated ruleset (link) \"" + yo3 + "\" -> DELETE successfully";
-						save = true;
-					}
-					else {
-						sending = "Failed to get the ID from your command.";
-					}
-				}
-				if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
-
-				well_done = true;
-			}
-			else if (yo2 == "text" && yo3 != "*") {
-
-				std::string sending;
-				{
-					std::lock_guard<std::mutex> luck_me(data.mut);
-					auto ch_id = buck.get_id();
-					auto& friendo = data.chats[ch_id];
-					std::lock_guard<std::mutex> luck(friendo.mute);
-
-					while (res.length() > 0) {
-						if (!std::isdigit(res[0])) { // not a number
-							res.erase(res.begin());
-						}
-						else break;
-					}
-
-					unsigned long long yaoo;
-					
-					if (sscanf_s(res.c_str(), "%llu", &yaoo) == 1) {
-
-						bool already_got = false;
-
-						for (auto& h : friendo.nlf_overwrite_contains) {
-							if (h.first == yo3) {
-								h.second = yaoo ? yaoo : 1;
-								already_got = true;
-								break;
-							}
-						}
-
-						if (!already_got) friendo.nlf_overwrite_contains.push_back({ yo3, yaoo ? yaoo : 1 });
-
-						if (yaoo) sending = "Added/updated ruleset (text) \"" + yo3 + "\" -> <#" + std::to_string(yaoo) + "> successfully";
-						else sending = "Added/updated ruleset (text) \"" + yo3 + "\" -> DELETE successfully";
-						save = true;
-					}
-					else {
-						sending = "Failed to get the ID from your command.";
-					}
-				}
-				if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
-
-				well_done = true;
-			}
-			else if (yo2 == "file" && yo3 != "*") {
-
-				std::string sending;
-				{
-					std::lock_guard<std::mutex> luck_me(data.mut);
-					auto ch_id = buck.get_id();
-					auto& friendo = data.chats[ch_id];
-					std::lock_guard<std::mutex> luck(friendo.mute);
-
-					while (res.length() > 0) {
-						if (!std::isdigit(res[0])) { // not a number
-							res.erase(res.begin());
-						}
-						else break;
-					}
-
-					unsigned long long yaoo;
-					
-					if (sscanf_s(res.c_str(), "%llu", &yaoo) == 1) {
-
-						bool already_got = false;
-
-						for (auto& h : friendo.files_overwrite_contains) {
-							if (h.first == yo3) {
-								h.second = yaoo ? yaoo : 1;
-								already_got = true;
-								break;
-							}
-						}
-
-						if (!already_got) friendo.files_overwrite_contains.push_back({ yo3, yaoo ? yaoo : 1 });
-
-						if (yaoo) sending = "Added/updated ruleset (file) \"" + yo3 + "\" -> <#" + std::to_string(yaoo) + "> successfully";
-						else sending = "Added/updated ruleset (file) \"" + yo3 + "\" -> DELETE successfully";
-						save = true;
-					}
-					else {
-						sending = "Failed to get the ID from your command.";
-					}
-				}
-				if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
-
-				well_done = true;
-			}
-			else if (yo2 == "remove") { // remember * = all
-
-				if (yo3 == "*" && res == "*") {
-
-					std::string sending;
-					{
-						std::lock_guard<std::mutex> luck_me(data.mut);
-						auto ch_id = buck.get_id();
-						auto& friendo = data.chats[ch_id];
-						std::lock_guard<std::mutex> luck(friendo.mute);
-
-						friendo.link_overwrite_contains.clear();
-						friendo.files_overwrite_contains.clear();
-						friendo.nlf_overwrite_contains.clear();
-
-						sending = "Cleaned up ALL rulesets of this chat.";
-						save = true;
-					}
-					if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
-
-					well_done = true;
-				}
-				else if (yo3 == "link") {
-
-					std::string sending;
-					{
-						std::lock_guard<std::mutex> luck_me(data.mut);
-						auto ch_id = buck.get_id();
-						auto& friendo = data.chats[ch_id];
-						std::lock_guard<std::mutex> luck(friendo.mute);
-
-						if (res == "*") {
-							friendo.link_overwrite_contains.clear();
-
-							sending = "Cleaned up ALL LINK rulesets of this chat.";
-							save = true;
-						}
-						else { // contains
-
-							bool found = false;
-
-							for (size_t p = 0; p < friendo.link_overwrite_contains.size(); p++) {
-								if (friendo.link_overwrite_contains[p].first == res) {
-									friendo.link_overwrite_contains.erase(friendo.link_overwrite_contains.begin() + p);
-									found = true;
-									break;
-								}
-							}
-
-							if (found) {
-								sending = "Removed ruleset (link) with key \"" + res + "\" successfully.";
-								save = true;
-							}
-							else {
-								sending = "Can't find any ruleset (link) with key \"" + res + "\".";
-							}
-						}
-					}
-					if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
-
-					well_done = true;
-				}
-				else if (yo3 == "text") {
-
-					std::string sending;
-					{
-						std::lock_guard<std::mutex> luck_me(data.mut);
-						auto ch_id = buck.get_id();
-						auto& friendo = data.chats[ch_id];
-						std::lock_guard<std::mutex> luck(friendo.mute);
-
-						if (res == "*") {
-							friendo.nlf_overwrite_contains.clear();
-
-							sending = "Cleaned up ALL TEXT rulesets of this chat.";
-							save = true;
-						}
-						else { // contains
-
-							bool found = false;
-
-							for (size_t p = 0; p < friendo.nlf_overwrite_contains.size(); p++) {
-								if (friendo.nlf_overwrite_contains[p].first == res) {
-									friendo.nlf_overwrite_contains.erase(friendo.nlf_overwrite_contains.begin() + p);
-									found = true;
-									break;
-								}
-							}
-
-							if (found) {
-								sending = "Removed ruleset (text) with key \"" + res + "\" successfully.";
-								save = true;
-							}
-							else {
-								sending = "Can't find any ruleset (text) with key \"" + res + "\".";
-							}
-						}
-					}
-					if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
-
-					well_done = true;
-				}
-				else if (yo3 == "file") {
-
-					std::string sending;
-					{
-						std::lock_guard<std::mutex> luck_me(data.mut);
-						auto ch_id = buck.get_id();
-						auto& friendo = data.chats[ch_id];
-						std::lock_guard<std::mutex> luck(friendo.mute);
-
-						if (res == "*") {
-							friendo.files_overwrite_contains.clear();
-
-							sending = "Cleaned up ALL FILE rulesets of this chat.";
-							save = true;
-						}
-						else { // contains
-
-							bool found = false;
-
-							for (size_t p = 0; p < friendo.files_overwrite_contains.size(); p++) {
-								if (friendo.files_overwrite_contains[p].first == res) {
-									friendo.files_overwrite_contains.erase(friendo.files_overwrite_contains.begin() + p);
-									found = true;
-									break;
-								}
-							}
-
-							if (found) {
-								sending = "Removed ruleset (file) with key \"" + res + "\" successfully.";
-								save = true;
-							}
-							else {
-								sending = "Can't find any ruleset (file) with key \"" + res + "\".";
-							}
-						}
-					}
-					if (sending.length() > 0) slow_flush(sending, buck, guildid, logg);
-
-					well_done = true;
-				}
-				
-			}
-		}
-	}
-		break;
 	}
 
 	if (!well_done) {
@@ -1533,10 +1728,10 @@ void GuildHandle::save_settings()
 		auto cpy = sav.dump();
 		fwrite(cpy.c_str(), sizeof(char), cpy.length(), fpp.get());
 
-		logg->info("[!] Guild #{} saved config successfully.", guildid);
+		logg->info("Guild #{} saved config successfully.", guildid);
 	}
 	else {
-		logg->error("[!] Guild #{} failed to save config.", guildid);
+		logg->error("Guild #{} failed to save config.", guildid);
 	}
 }
 
@@ -1577,10 +1772,10 @@ void GuildHandle::load_settings()
 			}
 		}
 
-		logg->info("[!] Guild #{} loaded config successfully.", guildid);
+		logg->info("Guild #{} loaded config successfully.", guildid);
 	}
 	else {
-		logg->warn("[!] Guild #{} failed to load config. (new?)", guildid);
+		logg->warn("Guild #{} failed to load config. (new?)", guildid);
 	}
 }
 
