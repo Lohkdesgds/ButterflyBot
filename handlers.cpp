@@ -702,7 +702,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 			try {
 				if (fallback) {
 					auto mmm = fallback->delete_message(msg.get_id());
-					while (!mmm.available()) {
+					while (!mmm.get_ready()) {
 						std::this_thread::sleep_for(std::chrono::milliseconds(100));
 						std::this_thread::yield();
 					}
@@ -766,7 +766,7 @@ void GuildHandle::command(std::vector<std::string> args, aegis::channel& buck)
 			"- admintag add/remove <id> - allow or not a tag to run these commands\n```",
 
 			"```md\n"
-			"# Local: (* in most cases resets value)\n"
+			"# Local: (asterisk in most cases resets value)\n"
 			"- thumbnail - enables/disables the thumbnail\n"
 			"- regex - enables/disables filters as REGEX.\n"
 			"- casesensitive - enables/disables case sensitivity.\n"
@@ -1866,7 +1866,7 @@ void GuildHandle::handle(aegis::channel& src, aegis::gateway::objects::message m
 				slow_flush("You have no permission.", *src_p, guildid, logg);
 
 				auto mmm = src_p->delete_message(get_id);
-				while (!mmm.available()) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+				while (!mmm.get_ready()) std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
 				return;
 			}
@@ -1901,7 +1901,7 @@ void GuildHandle::handle(aegis::channel& ch, const unsigned long long mid, aegis
 {
 	try {
 		auto msgp = ch.get_message(mid);
-		while (!msgp.available()) {
+		while (!msgp.get_ready()) {
 			std::this_thread::sleep_for(std::chrono::milliseconds(100));
 			std::this_thread::yield();
 		}

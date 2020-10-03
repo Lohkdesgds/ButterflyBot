@@ -1,7 +1,11 @@
 #include "slow_flush.h"
 
-
-slowflush_end slow_flush(aegis::create_message_t m, aegis::channel& ch, unsigned long long this_guild_orig, std::shared_ptr<spdlog::logger> logg) {
+#ifndef LSW_DONTCAREMODE
+slowflush_end slow_flush(aegis::create_message_t m, aegis::channel& ch, unsigned long long this_guild_orig, std::shared_ptr<spdlog::logger> logg)
+#else
+bool slow_flush(aegis::create_message_t m, aegis::channel & ch, unsigned long long this_guild_orig, std::shared_ptr<spdlog::logger> logg)
+#endif
+{
 	std::this_thread::yield();
 	if (m._content.empty()) {
 		logg->warn("Guild #{} SlowFlush: content empty.", this_guild_orig);
@@ -19,11 +23,12 @@ slowflush_end slow_flush(aegis::create_message_t m, aegis::channel& ch, unsigned
 			std::this_thread::yield();
 #ifdef LSW_NO_GET
 #ifdef LSW_DONTCAREMODE
-			ch.create_message(m).then([logg, this_guild_orig](aegis::gateway::objects::message u) {logg->info("Guild #{} (later) flushed {} byte(s)", this_guild_orig, u.get_content().length()); });
+			ch.create_message(m).then<void>([logg, this_guild_orig](aegis::gateway::objects::message u) {logg->info("Guild #{} (later) flushed {} byte(s)", this_guild_orig, u.get_content().length()); });
 			return slowflush_end();
 #else
 			auto mmm = ch.create_message(m);
-			while (!mmm.available()) { std::this_thread::sleep_for(std::chrono::milliseconds(100)); std::this_thread::yield(); }
+			while (!mmm.get_ready()) { std::this_thread::sleep_for(std::chrono::milliseconds(100)); std::this_thread::yield(); }
+			//if (mmm.failed()) throw std::exception("Failed [.failed()].");
 			return mmm.get();
 #endif
 #else
@@ -42,7 +47,7 @@ slowflush_end slow_flush(aegis::create_message_t m, aegis::channel& ch, unsigned
 #endif
 		}
 		catch (aegis::error e) {
-			logg->critical("[Local][{}/{}] Guild #{} SlowFlush couldn't send message. Got error: {}", tries + 1, max_tries, this_guild_orig, e);
+			logg->critical("[{}/{}] Guild #{} SlowFlush couldn't send message. Got error: {}", tries + 1, max_tries, this_guild_orig, e);
 			std::this_thread::sleep_for(error_wait);
 			//for (size_t p = 0; p < 4; p++) std::this_thread::yield();
 		}
@@ -83,12 +88,12 @@ slowflush_end slow_flush(aegis::create_message_t m, aegis::channel& ch, unsigned
 			return slowflush_end().failed();
 		}
 		catch (std::exception e) {
-			logg->critical("[Local][{}/{}] Guild #{} SlowFlush couldn't send message. Got error: {}", tries + 1, max_tries, this_guild_orig, e.what());
+			logg->critical("[{}/{}] Guild #{} SlowFlush couldn't send message. Got error: {}", tries + 1, max_tries, this_guild_orig, e.what());
 			std::this_thread::sleep_for(error_wait);
 			//for (size_t p = 0; p < 4; p++) std::this_thread::yield();
 		}
 		catch (...) {
-			logg->critical("[Local][{}/{}] Guild #{} SlowFlush couldn't send message. Unknown error.", tries + 1, max_tries, this_guild_orig);
+			logg->critical("[{}/{}] Guild #{} SlowFlush couldn't send message. Unknown error.", tries + 1, max_tries, this_guild_orig);
 			std::this_thread::sleep_for(error_wait);
 			//for (size_t p = 0; p < 4; p++) std::this_thread::yield();
 			return slowflush_end().failed();
@@ -96,7 +101,12 @@ slowflush_end slow_flush(aegis::create_message_t m, aegis::channel& ch, unsigned
 	}
 	return slowflush_end().failed();
 }
-slowflush_end slow_flush(aegis::rest::aegis_file f, aegis::channel& ch, unsigned long long this_guild_orig, std::shared_ptr<spdlog::logger> logg) {
+#ifndef LSW_DONTCAREMODE
+slowflush_end slow_flush(aegis::rest::aegis_file f, aegis::channel& ch, unsigned long long this_guild_orig, std::shared_ptr<spdlog::logger> logg)
+#else
+bool slow_flush(aegis::rest::aegis_file f, aegis::channel& ch, unsigned long long this_guild_orig, std::shared_ptr<spdlog::logger> logg)
+#endif
+{
 	std::this_thread::yield();
 	if (f.data.empty()) {
 		logg->warn("Guild #{} SlowFlush: content empty.", this_guild_orig);
@@ -117,11 +127,12 @@ slowflush_end slow_flush(aegis::rest::aegis_file f, aegis::channel& ch, unsigned
 			std::this_thread::yield();
 #ifdef LSW_NO_GET
 #ifdef LSW_DONTCAREMODE
-			ch.create_message(m).then([logg, this_guild_orig](aegis::gateway::objects::message u) {logg->info("Guild #{} (later) flushed {} byte(s)", this_guild_orig, u.get_content().length()); });
+			ch.create_message(m).then<void>([logg, this_guild_orig](aegis::gateway::objects::message u) {logg->info("Guild #{} (later) flushed {} byte(s)", this_guild_orig, u.get_content().length()); });
 			return slowflush_end();
 #else
 			auto mmm = ch.create_message(m);
-			while (!mmm.available()) { std::this_thread::sleep_for(std::chrono::milliseconds(100)); std::this_thread::yield(); }
+			while (!mmm.get_ready()) { std::this_thread::sleep_for(std::chrono::milliseconds(100)); std::this_thread::yield(); }
+			//if (mmm.failed()) throw std::exception("Failed [.failed()].");
 			return mmm.get();
 #endif
 #else
@@ -140,7 +151,7 @@ slowflush_end slow_flush(aegis::rest::aegis_file f, aegis::channel& ch, unsigned
 #endif
 		}
 		catch (aegis::error e) {
-			logg->critical("[Local][{}/{}] Guild #{} SlowFlush couldn't send message. Got error: {}", tries + 1, max_tries, this_guild_orig, e);
+			logg->critical("[{}/{}] Guild #{} SlowFlush couldn't send message. Got error: {}", tries + 1, max_tries, this_guild_orig, e);
 			std::this_thread::sleep_for(error_wait);
 			//for (size_t p = 0; p < 4; p++) std::this_thread::yield();
 		}
@@ -181,12 +192,12 @@ slowflush_end slow_flush(aegis::rest::aegis_file f, aegis::channel& ch, unsigned
 			return slowflush_end().failed();
 		}
 		catch (std::exception e) {
-			logg->critical("[Local][{}/{}] Guild #{} SlowFlush couldn't send message. Got error: {}", tries + 1, max_tries, this_guild_orig, e.what());
+			logg->critical("[{}/{}] Guild #{} SlowFlush couldn't send message. Got error: {}", tries + 1, max_tries, this_guild_orig, e.what());
 			std::this_thread::sleep_for(error_wait);
 			//for (size_t p = 0; p < 4; p++) std::this_thread::yield();
 		}
 		catch (...) {
-			logg->critical("[Local][{}/{}] Guild #{} SlowFlush couldn't send message. Unknown error.", tries + 1, max_tries, this_guild_orig);
+			logg->critical("[{}/{}] Guild #{} SlowFlush couldn't send message. Unknown error.", tries + 1, max_tries, this_guild_orig);
 			std::this_thread::sleep_for(error_wait);
 			//for (size_t p = 0; p < 4; p++) std::this_thread::yield();
 			return slowflush_end().failed();
@@ -195,11 +206,21 @@ slowflush_end slow_flush(aegis::rest::aegis_file f, aegis::channel& ch, unsigned
 	return slowflush_end();
 }
 
-slowflush_end slow_flush(std::string str, aegis::channel& ch, unsigned long long this_guild_orig, std::shared_ptr<spdlog::logger> logg) {
+#ifndef LSW_DONTCAREMODE
+slowflush_end slow_flush(std::string str, aegis::channel& ch, unsigned long long this_guild_orig, std::shared_ptr<spdlog::logger> logg)
+#else
+bool slow_flush(std::string str, aegis::channel& ch, unsigned long long this_guild_orig, std::shared_ptr<spdlog::logger> logg)
+#endif
+{
 	return slow_flush(aegis::create_message_t().content(str), ch, this_guild_orig, logg);
 }
 
-slowflush_end slow_flush_embed(nlohmann::json emb, aegis::channel& ch, unsigned long long this_guild_orig, std::shared_ptr<spdlog::logger> logg) {
+#ifndef LSW_DONTCAREMODE
+slowflush_end slow_flush_embed(nlohmann::json emb, aegis::channel& ch, unsigned long long this_guild_orig, std::shared_ptr<spdlog::logger> logg)
+#else
+bool slow_flush_embed(nlohmann::json emb, aegis::channel& ch, unsigned long long this_guild_orig, std::shared_ptr<spdlog::logger> logg)
+#endif
+{
 	if (emb.empty()) {
 		logg->warn("Guild #{} SlowFlushEmbed: content empty.", this_guild_orig);
 		return slowflush_end().failed();
@@ -212,11 +233,12 @@ slowflush_end slow_flush_embed(nlohmann::json emb, aegis::channel& ch, unsigned 
 			std::this_thread::yield();
 #ifdef LSW_NO_GET
 #ifdef LSW_DONTCAREMODE
-			ch.create_message_embed({}, emb).then([logg, this_guild_orig](aegis::gateway::objects::message u) {logg->info("Guild #{} (later) flushed {} byte(s)", this_guild_orig, u.get_content().length()); });
+			ch.create_message_embed({}, emb).then<void>([logg, this_guild_orig](aegis::gateway::objects::message u) {logg->info("Guild #{} (later) flushed {} byte(s)", this_guild_orig, u.get_content().length()); });
 			return slowflush_end();
 #else
 			auto mmm = ch.create_message_embed({}, emb);
-			while (!mmm.available()) { std::this_thread::sleep_for(std::chrono::milliseconds(100)); std::this_thread::yield(); }
+			while (!mmm.get_ready()) { std::this_thread::sleep_for(std::chrono::milliseconds(100)); std::this_thread::yield(); }
+			//if (mmm.failed()) throw std::exception("Failed [.failed()].");
 			return mmm.get();
 #endif
 #else
@@ -235,7 +257,7 @@ slowflush_end slow_flush_embed(nlohmann::json emb, aegis::channel& ch, unsigned 
 #endif
 		}
 		catch (aegis::error e) {
-			logg->critical("[Local][{}/{}] Guild #{} SlowFlushEmbed couldn't send message. Got error: {}", tries + 1, max_tries, this_guild_orig, e);
+			logg->critical("[{}/{}] Guild #{} SlowFlushEmbed couldn't send message. Got error: {}", tries + 1, max_tries, this_guild_orig, e);
 			std::this_thread::sleep_for(error_wait);
 			//for (size_t p = 0; p < 4; p++) std::this_thread::yield();
 		}
@@ -276,12 +298,12 @@ slowflush_end slow_flush_embed(nlohmann::json emb, aegis::channel& ch, unsigned 
 			return slowflush_end().failed();
 		}
 		catch (std::exception e) {
-			logg->critical("[Local][{}/{}] Guild #{} SlowFlushEmbed couldn't send message. Got error: {}", tries + 1, max_tries, this_guild_orig, e.what());
+			logg->critical("[{}/{}] Guild #{} SlowFlushEmbed couldn't send message. Got error: {}", tries + 1, max_tries, this_guild_orig, e.what());
 			std::this_thread::sleep_for(error_wait);
 			//for (size_t p = 0; p < 4; p++) std::this_thread::yield();
 		}
 		catch (...) {
-			logg->critical("[Local][{}/{}] Guild #{} SlowFlushEmbed couldn't send message. Unknown error.", tries + 1, max_tries, this_guild_orig);
+			logg->critical("[{}/{}] Guild #{} SlowFlushEmbed couldn't send message. Unknown error.", tries + 1, max_tries, this_guild_orig);
 			std::this_thread::sleep_for(error_wait);
 			//for (size_t p = 0; p < 4; p++) std::this_thread::yield();
 			return slowflush_end().failed();
@@ -290,7 +312,12 @@ slowflush_end slow_flush_embed(nlohmann::json emb, aegis::channel& ch, unsigned 
 	return slowflush_end().failed();
 }
 
-slowflush_end slow_flush_embed(aegis::gateway::objects::embed emb, aegis::channel& ch, unsigned long long this_guild_orig, std::shared_ptr<spdlog::logger> logg) {
+#ifndef LSW_DONTCAREMODE
+slowflush_end slow_flush_embed(aegis::gateway::objects::embed emb, aegis::channel& ch, unsigned long long this_guild_orig, std::shared_ptr<spdlog::logger> logg)
+#else
+bool slow_flush_embed(aegis::gateway::objects::embed emb, aegis::channel& ch, unsigned long long this_guild_orig, std::shared_ptr<spdlog::logger> logg)
+#endif
+{
 	if (nlohmann::json(emb).empty()) {
 		logg->warn("Guild #{} SlowFlushEmbed: content empty.", this_guild_orig);
 		return slowflush_end().failed();
@@ -303,11 +330,12 @@ slowflush_end slow_flush_embed(aegis::gateway::objects::embed emb, aegis::channe
 			std::this_thread::yield();
 #ifdef LSW_NO_GET
 #ifdef LSW_DONTCAREMODE
-			ch.create_message_embed({}, emb).then([logg, this_guild_orig](aegis::gateway::objects::message u) {logg->info("Guild #{} (later) flushed {} byte(s)", this_guild_orig, u.get_content().length()); });
+			ch.create_message_embed({}, emb).then<void>([logg, this_guild_orig](aegis::gateway::objects::message u) {logg->info("Guild #{} (later) flushed {} byte(s)", this_guild_orig, u.get_content().length()); });
 			return slowflush_end();
 #else
 			auto mmm = ch.create_message_embed({}, emb);
-			while (!mmm.available()) { std::this_thread::sleep_for(std::chrono::milliseconds(100)); std::this_thread::yield(); }
+			while (!mmm.get_ready()) { std::this_thread::sleep_for(std::chrono::milliseconds(100)); std::this_thread::yield(); }
+			//if (mmm.failed()) throw std::exception("Failed [.failed()].");
 			return mmm.get();
 #endif
 #else
@@ -326,7 +354,7 @@ slowflush_end slow_flush_embed(aegis::gateway::objects::embed emb, aegis::channe
 #endif
 		}
 		catch (aegis::error e) {
-			logg->critical("[Local][{}/{}] Guild #{} SlowFlushEmbed couldn't send message. Got error: {}", tries + 1, max_tries, this_guild_orig, e);
+			logg->critical("[{}/{}] Guild #{} SlowFlushEmbed couldn't send message. Got error: {}", tries + 1, max_tries, this_guild_orig, e);
 			std::this_thread::sleep_for(error_wait);
 			//for (size_t p = 0; p < 4; p++) std::this_thread::yield();
 		}
@@ -367,12 +395,12 @@ slowflush_end slow_flush_embed(aegis::gateway::objects::embed emb, aegis::channe
 			return slowflush_end().failed();
 		}
 		catch (std::exception e) {
-			logg->critical("[Local][{}/{}] Guild #{} SlowFlushEmbed couldn't send message. Got error: {}", tries + 1, max_tries, this_guild_orig, e.what());
+			logg->critical("[{}/{}] Guild #{} SlowFlushEmbed couldn't send message. Got error: {}", tries + 1, max_tries, this_guild_orig, e.what());
 			std::this_thread::sleep_for(error_wait);
 			//for (size_t p = 0; p < 4; p++) std::this_thread::yield();
 		}
 		catch (...) {
-			logg->critical("[Local][{}/{}] Guild #{} SlowFlushEmbed couldn't send message. Unknown error.", tries + 1, max_tries, this_guild_orig);
+			logg->critical("[{}/{}] Guild #{} SlowFlushEmbed couldn't send message. Unknown error.", tries + 1, max_tries, this_guild_orig);
 			std::this_thread::sleep_for(error_wait);
 			//for (size_t p = 0; p < 4; p++) std::this_thread::yield();
 			return slowflush_end().failed();

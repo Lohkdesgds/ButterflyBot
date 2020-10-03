@@ -11,7 +11,7 @@
 const std::string main_cmd = "lsw/bb";
 const unsigned long long mee_dev = 280450898885607425; // myself, for debugging and help
 const unsigned long long bot_ids[2] = { 524361154294972416, /*beta:*/752301949528834068 };
-const std::string version = "V1.4.2.0a";
+const std::string version = "V2.0.0.0a";
 
 const char recycle_emoji[] = u8"%E2%99%BB%EF%B8%8F";
 const char delete_emoji[] = u8"%E2%9D%8C";
