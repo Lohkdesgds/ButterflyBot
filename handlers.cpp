@@ -335,6 +335,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 	/*
 	IF value is 0			=> NOT FOUND
 	ELSE IF value is 1		=> ERASE ONLY
+	ELSE IF value is 2		=> IGNORE
 	ELSE					=> COPY
 	*/
 
@@ -373,7 +374,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 			}
 		}
 		if (!chat_link) {
-			chat_link = links;
+			chat_link = links > 2 ? links : 2;
 		}
 	}
 
@@ -405,12 +406,12 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 			}
 		}
 		if (!chat_file) {
-			chat_file = files;
+			chat_file = files > 2 ? files : 2;
 		}
 	}
 
 	// >> TEXT
-	if (!chat_link && !chat_file) {
+	if (!chat_link && !chat_file) { // probably add content.lenth() > 0 as filter so 2 makes sense. for now this won't affect the behaviour
 		//logg->info("Got not link nor file. Handling...");
 
 		for (auto& i : nlf_overwrite_contains) {
@@ -429,7 +430,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 			}
 		}
 		if (!chat_none) {
-			chat_none = nonee;
+			chat_none = nonee > 2 ? nonee : 2;
 		}
 	}
 
@@ -437,7 +438,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 
 
 	// HANDLE LINK
-	if (chat_link > 1) { // has link, share link in links section (might have file)				<< LINKS
+	if (chat_link > 2) { // has link, share link in links section (might have file)				<< LINKS
 		//logg->info("Moving/Copying link...");
 
 		aegis::channel* ch = get_channel_safe(chat_link, core);
@@ -498,7 +499,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 	}
 
 	// HANDLE FILE
-	if (chat_file > 1) { // has file, share file in files section (might have link)				<< FILES
+	if (chat_file > 2) { // has file, share file in files section (might have link)				<< FILES
 		//logg->info("Moving/Copying file...");
 
 		aegis::channel* ch = get_channel_safe(embed_fallback ? embed_fallback : chat_file, core);
@@ -628,7 +629,7 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 	}
 
 	// HANDLE NEITHER BUT TEXT
-	if (chat_link == 0 && chat_file == 0 && chat_none > 1) { // not link and no file, DEFAULT chat_none				<< NONES || just_delete_source
+	if (chat_link == 0 && chat_file == 0 && chat_none > 2) { // not link and no file, DEFAULT chat_none				<< NONES || just_delete_source
 		//logg->info("Moving/Copying text...");
 
 		if (content.length()) {
@@ -693,8 +694,8 @@ void chat_config::handle_message(std::shared_ptr<aegis::core> core, aegis::gatew
 	}
 
 
-	// CLEANUP
-	if (chat_link || chat_file || chat_none) {
+	// CLEANUP (2 == ignore, 0 not triggered)
+	if (chat_link == 1 || chat_file == 1 || chat_none == 1 || chat_link > 2 || chat_file > 2 || chat_none > 2) {
 		//logg->info("Cleaning up original message...");
 
 		std::this_thread::yield();
