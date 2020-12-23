@@ -1,14 +1,23 @@
-#include "download.h"
+#include "downloader.h"
 
 namespace LSW {
 	namespace v5 {
-			bool Downloader::get(const char* url)
+		namespace Interface {
+			Downloader::~Downloader()
 			{
+				if (thr.joinable()) thr.join();
+			}
+			bool Downloader::get(const std::string& url)
+			{
+#ifdef UNICODE
 				HINTERNET connect = InternetOpen(L"LSW Downloader V5.0", INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
+#else
+				HINTERNET connect = InternetOpen("LSW Downloader V5.0", INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
+#endif
 				if (!connect) return false;
-				HINTERNET OpenAddress = InternetOpenUrlA(connect, url, NULL, 0, INTERNET_FLAG_PRAGMA_NOCACHE | INTERNET_FLAG_KEEP_CONNECTION, 0);
+				HINTERNET OpenAddress = InternetOpenUrlA(connect, url.c_str(), NULL, 0, INTERNET_FLAG_PRAGMA_NOCACHE | INTERNET_FLAG_KEEP_CONNECTION, 0);
 				if (!OpenAddress) return false;
-				
+
 
 				char DataReceived[download::max_block_size];
 				DWORD NumberOfBytesRead = 0;
@@ -28,27 +37,26 @@ namespace LSW {
 				InternetCloseHandle(connect);
 				return true;
 			}
-			bool Downloader::getASync(const char* url)
+			bool Downloader::get_async(const std::string& url)
 			{
 				if (!threadend) return false;
+				else if (thr.joinable()) thr.join();
 				threadend = false;
 				thr = std::thread([&, url] { get(url); threadend = true; });
 				return true;
 			}
-			bool Downloader::ended()
+			bool Downloader::ended() const
 			{
-				if (threadend) {
-					if (thr.joinable()) thr.join();
-				}
 				return threadend;
 			}
-			size_t Downloader::bytesRead()
+			size_t Downloader::bytes_read() const
 			{
 				return TotalBytesRead;
 			}
-			std::string& Downloader::read()
+			const std::string& Downloader::read() const
 			{
 				return buf;
 			}
+		}
 	}
 }

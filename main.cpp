@@ -1,188 +1,160 @@
-﻿#include "shared.h"
+#include "guild_handler.h"
 
-void nolock(std::function<void(void)> f, std::string wher = "") {
-	std::string err_line = "[FATAL-ERROR] NoLock failed" + (wher.length() > 0 ? (" at " + wher) : "") + ":";
-	try {
-		f();
-	}
-	catch (aegis::error e) {
-		std::cout << err_line << e << std::endl;
-	}
-	catch (std::exception e) {
-		std::cout << err_line << e.what() << std::endl;
-	}
-	catch (...) {
-		std::cout << err_line << std::endl;
-	}
-}
 
-int main()
-{
-	std::vector<std::shared_ptr<GuildHandle>> guilds;
-	std::mutex guilds_m;
+int main() {
+
+	std::vector<std::unique_ptr<GuildHandle>> guilds;
+	std::shared_mutex shared;
 	bool ignore_all_ending_lmao = false;
 
-	std::shared_ptr<aegis::core> thebot = std::shared_ptr<aegis::core>(new aegis::core(spdlog::level::trace, std::thread::hardware_concurrency() < 4 ? 4 : std::thread::hardware_concurrency()), [](aegis::core* c) {
+	std::shared_ptr<aegis::core> thebot = std::shared_ptr<aegis::core>(new aegis::core(spdlog::level::trace, 0), [](aegis::core* c) {
 		c->shutdown();
 		delete c;
-		});
-		
-		
-		/*std::shared_ptr<aegis::core>(new aegis::core(aegis::create_bot_t().log_level(spdlog::level::trace).token(token)), [](aegis::core* c) {
-		c->shutdown();
-		delete c;
-		});*/
+	});
 
 	std::shared_ptr<spdlog::logger> logg = thebot->log;
 	logg->info("Bot has started.");
 
-
-	// join in guild
-	thebot->set_on_guild_create([&](aegis::gateway::events::guild_create obj) {
+	thebot->set_on_guild_create_raw([&](const nlohmann::json& result, aegis::shards::shard* _shard){//[&](aegis::gateway::events::guild_create obj) {
 		if (ignore_all_ending_lmao) return;
-		nolock([&] {
 
-			logg->info("Joined/Connected Guild #{} ({}) from {}", obj.guild.id, obj.guild.name, obj.guild.region);
+		unsigned long long guild_id = stdstoulla(result["d"]["id"].get<std::string>());
+		std::string guild_name = result["d"]["name"];
+		std::string guild_region = result["d"]["region"];
 
-			guilds_m.lock();
-			for (size_t p = 0; p < guilds.size(); p++) {
-				if (guilds[p]->amI(obj.guild.id)) {
-					guilds_m.unlock();
-					return;
-				}
-			}
-			guilds.emplace_back(std::make_shared<GuildHandle>(thebot, obj.guild.id));
-			auto cpy = guilds.back();
-			guilds_m.unlock();
-			cpy->start();
+		logg->info("Joined/Connected Guild #{} ({}) from {}", guild_id, guild_name, guild_region);
 
-			}, "set_on_guild_create");
-		});
-	// leave a guild
-	thebot->set_on_guild_delete([&](aegis::gateway::events::guild_delete obj) {
+		LockGuardShared guard(shared, lock_shared_mode::SHARED);
+
+		for (auto& i : guilds) {
+			if (*i == guild_id) return;
+		}
+
+		guard.lock();
+
+		guilds.push_back(std::make_unique<GuildHandle>(thebot, guild_id));
+	});
+
+	thebot->set_on_guild_delete_raw([&](const nlohmann::json& result, aegis::shards::shard* _shard) {//[&](aegis::gateway::events::guild_delete obj) {
 		if (ignore_all_ending_lmao) return;
-		nolock([&] {
-			logg->info("Left Guild #{}", obj.guild_id);
 
-			std::lock_guard<std::mutex> luck(guilds_m);
-			for (size_t p = 0; p < guilds.size(); p++) {
-				if (guilds[p]->amI(obj.guild_id)) {
-					guilds.erase(guilds.begin() + p);
-					return;
-				}
+		unsigned long long guild_id = stdstoulla(result["d"]["id"].get<std::string>());
+
+		logg->info("Left Guild #{}", guild_id);
+
+		LockGuardShared guard(shared, lock_shared_mode::EXCLUSIVE);
+		for (size_t p = 0; p < guilds.size(); p++) {
+			if (*guilds[p] == guild_id) {
+				guilds.erase(guilds.begin() + p);
+				return;
 			}
-			}, "set_on_guild_delete");
-		});
+		}
+	});
 
-
-	thebot->set_on_message_create([&](aegis::gateway::events::message_create obj) {
+	thebot->set_on_message_create_raw([&](const nlohmann::json& result, aegis::shards::shard* _shard) {//[&](aegis::gateway::events::message_create obj) {
 		if (ignore_all_ending_lmao) return;
-		nolock([&] {
 
-			if (obj.msg.author.is_bot()) return;
+		LockGuardShared guard(shared, lock_shared_mode::SHARED);
 
-			guilds_m.lock();
-			for (auto& i : guilds) {
-				if (i->amI(obj.msg.get_guild_id())) {
-					auto cpy = i;
-					guilds_m.unlock();
-					cpy->handle(obj.channel, obj.msg);
-					return;
-				}
+		unsigned long long guild_id = 0;
+		if (result["d"].count("guild_id") && !result["d"]["guild_id"].is_null()) guild_id = stdstoulla(result["d"]["guild_id"].get<std::string>());
+
+		aegis::channel* ch = thebot->find_channel(result["d"]["channel_id"]);
+		if (!ch) return;
+		if (ch->get_guild_id() == 0) return; // dm
+		if (result["d"].count("webhook_id")) return; // webhook event
+
+		auto g = &ch->get_guild();
+		{
+			if (result["d"].count("member") && !result["d"]["member"].is_null())
+			{
+				aegis::gateway::objects::member u = result["d"]["member"];
+				u._user = result["d"]["author"].get<aegis::gateway::objects::user>();
 			}
+		}
 
-			logg->info("Got new message from unknown source?! Creating Guild #{}...", obj.msg.get_guild_id());
+		//user was previously created via presence update, but presence update only contains id
+		aegis::gateway::events::message_create obj{ *_shard, aegis::lib::nullopt, std::ref(*ch), {result["d"], thebot.get()} };
 
-			guilds.emplace_back(std::make_shared<GuildHandle>(thebot, obj.msg.get_guild_id()));
 
-			auto cpy = guilds.back();
-			guilds_m.unlock();
+		for (auto& i : bot_ids) {
+			if (obj.msg.author.id == i) return; // bot react
+		}
 
-			cpy->handle(obj.channel, obj.msg); // handle
+		//obj.msg = result["d"];
 
-			}, "set_on_message_create");
-		});
-	thebot->set_on_message_update([&](aegis::gateway::events::message_update obj) {
+		for (auto& i : guilds) {
+			if (*i == obj.channel.get_guild_id()) {
+				i->handle(obj.channel, obj.msg);
+				return;
+			}
+		}
+
+		guard.lock();
+
+		logg->info("Joined/Connected Guild #{} (Weird way)", obj.channel.get_guild_id());
+		guilds.push_back(std::make_unique<GuildHandle>(thebot, obj.channel.get_guild_id()));
+		guilds.back()->handle(obj.channel, obj.msg);
+	});
+
+	thebot->set_on_message_reaction_add_raw([&](const nlohmann::json& result, aegis::shards::shard* _shard) {
 		if (ignore_all_ending_lmao) return;
-		nolock([&] {
-			if (obj.msg.get_content().empty()) return;
-			if (obj.msg.author.is_bot()) return;
 
-			guilds_m.lock();
-			for (auto& i : guilds) {
-				if (i->amI(obj.msg.get_guild_id())) {
-					auto cpy = i;
-					guilds_m.unlock();
-					cpy->handle(obj.channel, obj.msg);
-					return;
-				}
+		LockGuardShared guard(shared, lock_shared_mode::SHARED);
+
+		unsigned long long guild_id = 0;
+		unsigned long long channel_id = stdstoulla(result["d"]["channel_id"]);
+		unsigned long long message_id = stdstoulla(result["d"]["message_id"]);
+		aegis::gateway::objects::emoji emoji = result["d"]["emoji"];
+		if (result["d"].count("guild_id") && !result["d"]["guild_id"].is_null())
+			guild_id = stdstoulla(result["d"]["guild_id"]);
+
+		emoji.user = stdstoulla(result["d"]["user_id"]);
+
+		for (auto& i : bot_ids) {
+			if (emoji.user == i) return; // bot react
+		}
+
+
+		if (!guild_id) return; // not a guild
+
+		aegis::channel* ch = thebot->find_channel(channel_id);
+		if (!ch) {
+			thebot->log->error("Failed to find channel to handle reaction event on guild {}", guild_id);
+			return;
+		}
+
+		for (auto& i : guilds) {
+			if (*i == guild_id) {
+				i->handle(*ch, message_id, emoji);
+				return;
 			}
+		}
 
-			logg->info("Got new message from unknown source?! Creating Guild #{}...", obj.msg.get_guild_id());
+		guard.lock();
 
-			guilds.emplace_back(std::make_unique<GuildHandle>(thebot, obj.msg.get_guild_id()));
-
-			auto cpy = guilds.back();
-			guilds_m.unlock();
-
-			cpy->handle(obj.channel, obj.msg); // handle
-
-			}, "set_on_message_update");
-		});
-	thebot->set_on_message_reaction_add([&](aegis::gateway::events::message_reaction_add obj) {
-		if (ignore_all_ending_lmao) return;
-		nolock([&] {
-			obj.emoji.user = obj.user_id; // come on
-
-			if ([&] {for (auto& i : bot_ids) if (obj.user_id == i) return true; return false; }()) return;
-
-			guilds_m.lock();
-			for (auto& i : guilds) {
-				if (i->amI(obj.guild_id)) {
-					auto cpy = i;
-					guilds_m.unlock();
-					aegis::channel* ch = nullptr;
-					for (size_t p = 0; p < 5 && !ch; p++) {
-						ch = thebot->channel_create(obj.channel_id);
-					}
-					if (ch) cpy->handle(*ch, obj.message_id, obj.emoji);
-					else logg->error("Guild #{} failed to create channel to handle emoji.", obj.guild_id);
-
-					return;
-				}
-			}
-
-			logg->info("Got new message from unknown source?! Creating Guild #{}...", obj.guild_id);
-
-			guilds.emplace_back(std::make_shared<GuildHandle>(thebot, obj.guild_id));
-
-			auto cpy = guilds.back();
-			guilds_m.unlock();
-
-			aegis::channel* ch = nullptr;
-			for (size_t p = 0; p < 5 && !ch; p++) {
-				ch = thebot->channel_create(obj.channel_id);
-			}
-			if (ch) cpy->handle(*ch, obj.message_id, obj.emoji);
-
-			}, "set_on_message_create");
-		});
+		logg->info("Joined/Connected Guild #{} (Weird way)", guild_id);
+		guilds.push_back(std::make_unique<GuildHandle>(thebot, guild_id));
+		guilds.back()->handle(*ch, message_id, emoji);
+	});
 
 
 	thebot->run();
-
 	std::thread here_lol = std::thread([&] {
 
-		std::this_thread::sleep_for(std::chrono::seconds(5));
+		std::this_thread::sleep_for(std::chrono::seconds(20));
 
 		auto keep = [&] {return (!ignore_all_ending_lmao); };
 
 		while (keep()) {
 
-			nolock([&] {
-				std::string msg = main_cmd + " - " + version + " - " + std::to_string(thebot->get_guild_count()) + " guild(s)!";
+			try {
+				std::string msg = default_command_start + " - " + version;// +" - " + std::to_string(thebot->get_guild_count()) + " guild(s)!";
 				thebot->update_presence(msg, aegis::gateway::objects::activity::Game, aegis::gateway::objects::presence::Idle);
-			});
+			}
+			catch (...) {
+				std::cout << "\nFAILED ONCE AT PRESENCE THREAD!" << std::endl;
+			}
 
 			for (size_t c = 0; c < 50 && keep(); c++) {
 				std::this_thread::yield();
@@ -200,13 +172,14 @@ int main()
 			std::string combo;
 			logg->info("Processing list...");
 			{
-				std::lock_guard<std::mutex> luck(guilds_m);
+				LockGuardShared guard(shared, lock_shared_mode::EXCLUSIVE);
 				std::lock_guard<std::shared_mutex> luck2(thebot->get_guild_mutex());
-				auto& cpyy = thebot->get_guild_map();			
+				auto& cpyy = thebot->get_guild_map();
 				for (auto& i : guilds) {
 					for (auto& j : cpyy) {
-						if (i->amI(j.first)) {
-							combo += "- \"" + j.second->get_name() + "\" from \"" + j.second->get_region() + "\"\n";
+						if (*i == j.first) {
+							combo += "- \"" + std::to_string(j.first) + "\"\n";
+							//combo += "- \"" + j.second->get_name() + "\" from \"" + j.second->get_region() + "\"\n";
 						}
 					}
 				}
@@ -214,7 +187,7 @@ int main()
 			logg->info("List: \n{}", combo);
 		}
 	}
-	logg->info("Bot is shutting down...");
+	logg->warn("Bot is shutting down...");
 
 	ignore_all_ending_lmao = true;
 
@@ -222,8 +195,8 @@ int main()
 
 	// kill all threads
 	{
-		std::lock_guard<std::mutex> luck(guilds_m);
-		//for (auto& i : guilds) i->end();
+		std::cout << "Locking all data..." << std::endl;
+		LockGuardShared guard(shared, lock_shared_mode::EXCLUSIVE);
 		guilds.clear();
 	}
 

@@ -344,3 +344,4 @@ keys.h
 *.wolflogv2
 *.bbv1
 config.json
+*.bbv2
