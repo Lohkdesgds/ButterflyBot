@@ -7,6 +7,9 @@
     <Filter Include="Working On">
       <UniqueIdentifier>{87e8ad9f-ab03-40ba-9549-e116455be9d9}</UniqueIdentifier>
     </Filter>
+    <Filter Include="AEGIS">
+      <UniqueIdentifier>{70b10f15-a205-48a2-bbf6-72797a59fdc0}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">

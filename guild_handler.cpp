@@ -2125,7 +2125,7 @@ void GuildHandle::handle(aegis::channel& ch, aegis::gateway::objects::message m)
 		bool has_config_been_set = false; // if not, ignore config variable.*/
 		int embed_set_highest_value = 0;
 		std::function<void(void)> embed_set_to_do;
-		const auto mcpy = m; // fixed content copy
+		const aegis::gateway::objects::message mcpy = m; // fixed content copy
 
 
 		// ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ # ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ //
@@ -2600,7 +2600,7 @@ void GuildHandle::handle(aegis::channel& ch, const unsigned long long mid, aegis
 			unsigned long long user_c = 0;
 
 			if (j.count("footer") && !j["footer"].is_null()) {
-				auto inn = j["footer"];
+				const auto& inn = j["footer"];
 				if (inn.count("text") && !inn["text"].is_null()) {
 					std::string scn = inn["text"].get<std::string>();
 					if (!sscanf_s(scn.c_str(), "%llu", &user_c)) user_c = 0;
@@ -2609,24 +2609,37 @@ void GuildHandle::handle(aegis::channel& ch, const unsigned long long mid, aegis
 
 			std::string e_end = e.id ? ((e.animated ? "a:" : "") + e.name + ":" + std::to_string(e.id)) : (transform_weirdo(e.name));
 
-			if (user_c && user_c == e.user) {
-				if (!e.id && e_end == delete_emoji) {
-					//logg->info("Emoji: got DELETE MESSAGE.");
-					ch.delete_message(msg.get_id());
-				}
-				else if (!e.id && e_end == recycle_emoji) {
-					//logg->info("Emoji: got DEL REACTIONS.");
-					ch.delete_all_reactions(msg.get_id());
+			aegis::gateway::objects::message msg = ch.get_message(mid).get();
+
+			if (user_c) {
+				if (user_c == e.user) {
+					if (!e.id && e_end == delete_emoji) {
+						//logg->info("Emoji: got DELETE MESSAGE.");
+						ch.delete_message(msg.get_id());
+					}
+					else if (!e.id && e_end == recycle_emoji) {
+						//logg->info("Emoji: got DEL REACTIONS.");
+						ch.delete_all_reactions(msg.get_id());
+					}
+					else {
+						//logg->info("Emoji: got ADD.");
+						ch.create_reaction(msg.get_id(),
+							e.id ? ((e.animated ? "a:" : "") + e.name + ":" + std::to_string(e.id)) : (transform_weirdo(e.name))
+						);
+					}
 				}
 				else {
-					//logg->info("Emoji: got ADD.");
-					ch.create_reaction(msg.get_id(),
-						e.id ? ((e.animated ? "a:" : "") + e.name + ":" + std::to_string(e.id)) : (transform_weirdo(e.name))
-					);
+					bool skip_ = false;
+					if (msg.reactions.size()) {
+						for (auto& i : msg.reactions) {
+							if (i.emoji_.id == e.id && i.emoji_.name == e.name && i.emoji_.animated == e.animated && (i.count > 1 || i.me)) {
+								skip_ = true;
+								break;
+							}
+						}
+					}
+					if (!skip_) ch.delete_user_reaction(msg.get_id(), e.id ? ((e.animated ? "a:" : "") + e.name + ":" + std::to_string(e.id)) : (transform_weirdo(e.name)), e.user);
 				}
-			}
-			else {
-				ch.delete_user_reaction(msg.get_id(), e.id ? ((e.animated ? "a:" : "") + e.name + ":" + std::to_string(e.id)) : (transform_weirdo(e.name)), e.user);
 			}
 		}
 	}

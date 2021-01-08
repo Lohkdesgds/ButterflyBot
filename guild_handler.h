@@ -1,10 +1,10 @@
 #pragma once
 
-#include <aegis.hpp>
-#include "download/downloader.h"
-
 #include <regex>
 #include <unordered_map>
+
+#include <aegis.hpp>
+#include "download/downloader.h"
 
 using namespace LSW::v5;
 
@@ -12,7 +12,7 @@ constexpr size_t maximum_file_size_global = 8e6;
 constexpr size_t maximum_rules_vector_per_chat_per_type = 10;
 const std::string default_command_start = "lsw/bb";
 constexpr size_t safe_msg_limit = 1998;
-const std::string version = "V3.0.0-rc7";
+const std::string version = "V3.0.0";
 
 const auto default_color = 0xA321FF;
 const size_t str_max_len_embed_default = 60;
