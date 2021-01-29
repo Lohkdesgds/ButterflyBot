@@ -994,7 +994,6 @@ void GuildHandle::command(const std::string& arguments, aegis::channel& ch, aegi
 				if (detail_texts.length()) detail_texts.pop_back();
 			}
 
-			resume += "```md\n";
 			resume += "# This is the data saved for this server and some more information:\n";
 			resume += "- Number of chats configured (all server, indexed): " + std::to_string(data.chats.size()) + "\n";
 			if (detailed) resume += "* Chats:\n{" + detail_chats + "}\n";
@@ -1011,14 +1010,13 @@ void GuildHandle::command(const std::string& arguments, aegis::channel& ch, aegi
 			resume += "- Peak memory usage:                                " + std::to_string(double(aegis::utility::getPeakRSS()) / (1u << 20)) + " MB\n";
 			resume += "- Uptime:                                           " + core->uptime_str() + "\n";
 			resume += "- Version:                                          " + version + "\n";
-			resume += "```";
 
 			for (size_t off = 0; resume.length();) {
 				std::string to_send = resume.substr(0, 1950);
 				if (resume.length() > 1950) resume = resume.substr(1950);
 				else resume.clear();
 				ch.create_message(
-					to_send
+					"```md\n" + to_send + "```"
 				); // ).then<void>(autodie);
 			}
 
@@ -2043,7 +2041,7 @@ Tools::Future<aegis::gateway::objects::message> GuildHandle::copy_generate_embed
 
 		return ch->create_message_embed({}, j).then<aegis::gateway::objects::message>([=](aegis::gateway::objects::message m) {
 			for (auto& j : cc.auto_react_with) {
-				m.create_reaction(j);
+				m.create_reaction(j).get();
 			}
 			return m;
 		});
@@ -2161,7 +2159,7 @@ void GuildHandle::handle(aegis::channel& ch, aegis::gateway::objects::message m)
 					switch (cc.handling) {
 					case handle_modes::NONE:
 					{
-						for (auto& j : cc.react_to_source) m.create_reaction(j);
+						for (auto& j : cc.react_to_source) m.create_reaction(j).get();
 					}
 						break;
 
@@ -2179,14 +2177,14 @@ void GuildHandle::handle(aegis::channel& ch, aegis::gateway::objects::message m)
 
 					case handle_modes::COPY_SOURCE:
 					{
-						for (auto& j : cc.react_to_source) m.create_reaction(j);
+						for (auto& j : cc.react_to_source) m.create_reaction(j).get();
 
 						bool gottem = false;
 						auto fut = copy_message_to(gottem, cc.chat_to_send, m, cc.silence_codeblock, cc.silence_links);
 						if (gottem) {
 							fut.then<void>([=](aegis::gateway::objects::message m) {
 								for (auto& j : cc.react_to_copy) {
-									m.create_reaction(j);
+									m.create_reaction(j).get();
 								}
 							});
 						}
@@ -2212,7 +2210,7 @@ void GuildHandle::handle(aegis::channel& ch, aegis::gateway::objects::message m)
 						if (gottem) {
 							auto m3 = fut.get();
 							for (auto& j : cc.react_to_copy) {
-								m3.create_reaction(j);
+								m3.create_reaction(j).get();
 							}
 
 							if (!embed_set_to_do || cc.embed_settings.priority > embed_set_highest_value) {
@@ -2290,7 +2288,7 @@ void GuildHandle::handle(aegis::channel& ch, aegis::gateway::objects::message m)
 						switch (cc.handling) {
 						case handle_modes::NONE:
 						{
-							for (auto& j : cc.react_to_source) m.create_reaction(j);
+							for (auto& j : cc.react_to_source) m.create_reaction(j).get();
 						}
 						break;
 
@@ -2351,7 +2349,7 @@ void GuildHandle::handle(aegis::channel& ch, aegis::gateway::objects::message m)
 							if (gottem) {								
 								fut2.then<void>([=](aegis::gateway::objects::message m) {
 									for (auto& j : cc.react_to_copy) {
-										m.create_reaction(j);
+										m.create_reaction(j).get();
 									}
 								});
 							}
@@ -2415,7 +2413,7 @@ void GuildHandle::handle(aegis::channel& ch, aegis::gateway::objects::message m)
 							if (gottem) {
 								auto m3 = fut2.get();
 								for (auto& j : cc.react_to_copy) {
-									m3.create_reaction(j);
+									m3.create_reaction(j).get();
 								}
 								// asdasdasd
 
@@ -2490,7 +2488,7 @@ void GuildHandle::handle(aegis::channel& ch, aegis::gateway::objects::message m)
 					switch (cc.handling) {
 					case handle_modes::NONE:
 					{
-						for (auto& j : cc.react_to_source) m.create_reaction(j);
+						for (auto& j : cc.react_to_source) m.create_reaction(j).get();
 					}
 						break;
 
@@ -2515,7 +2513,7 @@ void GuildHandle::handle(aegis::channel& ch, aegis::gateway::objects::message m)
 						if (gottem) {
 							fut.then<void>([=](aegis::gateway::objects::message m) {
 								for (auto& j : cc.react_to_copy) {
-									m.create_reaction(j);
+									m.create_reaction(j).get();
 								}
 							});
 						}
@@ -2541,7 +2539,7 @@ void GuildHandle::handle(aegis::channel& ch, aegis::gateway::objects::message m)
 						if (gottem) {
 							auto m3 = fut.get();
 							for (auto& j : cc.react_to_copy) {
-								m3.create_reaction(j);
+								m3.create_reaction(j).get();
 							}
 
 							if (!embed_set_to_do || cc.embed_settings.priority > embed_set_highest_value) {
