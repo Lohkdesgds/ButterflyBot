@@ -142,15 +142,14 @@ int main() {
 	thebot->run();
 	std::thread here_lol = std::thread([&] {
 
-		std::this_thread::sleep_for(std::chrono::seconds(20));
+		std::this_thread::sleep_for(std::chrono::seconds(10));
 
 		auto keep = [&] {return (!ignore_all_ending_lmao); };
 
 		while (keep()) {
 
 			try {
-				std::string msg = default_command_start + " - " + version;// +" - " + std::to_string(thebot->get_guild_count()) + " guild(s)!";
-				thebot->update_presence(msg, aegis::gateway::objects::activity::Game, aegis::gateway::objects::presence::Idle);
+				thebot->update_presence(default_command_start + " - " + version, aegis::gateway::objects::activity::Game, aegis::gateway::objects::presence::Idle);
 			}
 			catch (...) {
 				std::cout << "\nFAILED ONCE AT PRESENCE THREAD!" << std::endl;
@@ -165,7 +164,7 @@ int main() {
 		});
 
 	std::string smth;
-	while (smth.find("exit") != 0) {
+	/*while (smth.find("exit") != 0) {
 		std::getline(std::cin, smth);
 
 		if (smth.find("list") == 0) {
@@ -186,7 +185,10 @@ int main() {
 			}
 			logg->info("List: \n{}", combo);
 		}
-	}
+	}*/
+
+	thebot->yield();
+
 	logg->warn("Bot is shutting down...");
 
 	ignore_all_ending_lmao = true;

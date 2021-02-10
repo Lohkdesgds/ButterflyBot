@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <regex>
 #include <unordered_map>
@@ -12,7 +12,7 @@ constexpr size_t maximum_file_size_global = 8e6;
 constexpr size_t maximum_rules_vector_per_chat_per_type = 10;
 const std::string default_command_start = "lsw/bb";
 constexpr size_t safe_msg_limit = 1998;
-const std::string version = "V3.0.2";
+const std::string version = "V3.0.3";
 
 const auto default_color = 0xA321FF;
 const size_t str_max_len_embed_default = 60;
@@ -24,8 +24,9 @@ const unsigned long long allowed_full_servers[] = {
 	281976851142803456, // LSW OFFICIAL
 	508808506569261100  // TESTS
 };
-const char recycle_emoji[] = u8"%E2%99%BB%EF%B8%8F";
-const char delete_emoji[] = u8"%E2%9D%8C";
+const std::string recycle_emoji = u8"%E2%99%BB%EF%B8%8F";
+const std::string delete_emoji	= u8"%E2%9D%8C";
+const std::string emoji_yes		= u8"%E2%9C%85"; //aegis::utility::url_encode(u8"✅");
 
 
 

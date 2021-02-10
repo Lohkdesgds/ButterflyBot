@@ -516,70 +516,77 @@ std::string GuildHandle::_command_react(std::unordered_map<size_t, std::string>&
 	std::string res;
 	if (processed[offset] == "source") {
 		if (processed[1 + offset] == "add") {
-			if (processed[2 + offset].empty()) {
-				res = "Unknown emoji!";
-			}
-			else {
-				std::string _filtered = processed[2 + offset];
-				if (_filtered.size() > 2) {
-					if (_filtered.front() == '<') {
-						_filtered.erase(_filtered.begin());
-						if (_filtered.back() == '>') _filtered.pop_back();
-					}
-					else {
-						_filtered = transform_weirdo(_filtered);
-					}
+			for (size_t p = 2 + offset; !processed[p].empty(); p++) {
+				std::string _filtered = processed[p];
+				if (_filtered.empty()) {
+					res += "Unknown emoji!\n";
 				}
+				else {
+					//std::string _filtered = processed[2 + offset];
+					if (_filtered.size() > 2) {
+						if (_filtered.front() == '<') {
+							_filtered.erase(_filtered.begin());
+							if (_filtered.back() == '>') _filtered.pop_back();
+						}
+						else {
+							_filtered = transform_weirdo(_filtered);
+						}
+					}
 
-				bool proceed = true;
-				for (auto& i : react_to_source)
-				{
-					if (i == _filtered) {
-						res = "Already in the list!";
-						proceed = false;
-						break;
+					bool proceed = true;
+					for (auto& i : react_to_source)
+					{
+						if (i == _filtered) {
+							res = "`" + _filtered + "` already in the list!\n";
+							proceed = false;
+							//break;
+						}
 					}
-				}
-				if (proceed) {
-					react_to_source.push_back(_filtered);
-					res = "Added " + _filtered + " to the list.";
+					if (proceed) {
+						react_to_source.push_back(_filtered);
+						res += "Added `" + _filtered + "` to the list.\n";
+					}
 				}
 			}
 		}
 		else if (processed[1 + offset] == "remove") {
-			if (processed[2 + offset].empty()) {
-				res = "Unknown emoji!";
-			}
-			else {
-				std::string _filtered = processed[2 + offset];
-				if (_filtered.size() > 2) {
-					if (_filtered.front() == '<') {
-						_filtered.erase(_filtered.begin());
-						if (_filtered.back() == '>') _filtered.pop_back();
-					}
-					else {
-						_filtered = transform_weirdo(_filtered);
-					}
+			for (size_t p = 2 + offset; !processed[p].empty(); p++) {
+				std::string _filtered = processed[p];
+				if (_filtered.empty()) {
+					res += "Unknown emoji!\n";
 				}
+				else {
+					//std::string _filtered = processed[2 + offset];
+					if (_filtered.size() > 2) {
+						if (_filtered.front() == '<') {
+							_filtered.erase(_filtered.begin());
+							if (_filtered.back() == '>') _filtered.pop_back();
+						}
+						else {
+							_filtered = transform_weirdo(_filtered);
+						}
+					}
 
-				bool proceed = true;
-				for (size_t p = 0; p < react_to_source.size(); p++)
-				{
-					if (react_to_source[p] == _filtered)
+					bool proceed = true;
+					for (size_t p = 0; p < react_to_source.size(); p++)
 					{
-						react_to_source.erase(react_to_source.begin() + p);
-						p--;
-						proceed = false;
-						res = "Removed successfully!";
+						if (react_to_source[p] == _filtered)
+						{
+							react_to_source.erase(react_to_source.begin() + p);
+							p--;
+							proceed = false;
+							res += "Removed `" + _filtered + "` successfully!\n";
+						}
 					}
-				}
-				if (proceed) {
-					res = "Couldn't find the emoji from list!";
+					if (proceed) {
+						res += "Couldn't find `" + _filtered + "` from list!\n";
+					}
 				}
 			}
 		}
 		else if (processed[1 + offset] == "remove_all") {
 			react_to_source.clear();
+			res = "Removed all reactions.";
 		}
 		else {
 			res += "Reacting to source: ";
@@ -590,70 +597,77 @@ std::string GuildHandle::_command_react(std::unordered_map<size_t, std::string>&
 	}
 	else if (processed[offset] == "destination") {
 		if (processed[1 + offset] == "add") {
-			if (processed[2 + offset].empty()) {
-				res = "Unknown emoji!";
-			}
-			else {
-				std::string _filtered = processed[2 + offset];
-				if (_filtered.size() > 2) {
-					if (_filtered.front() == '<') {
-						_filtered.erase(_filtered.begin());
-						if (_filtered.back() == '>') _filtered.pop_back();
-					}
-					else {
-						_filtered = transform_weirdo(_filtered);
-					}
+			for (size_t p = 2 + offset; !processed[p].empty(); p++) {
+				std::string _filtered = processed[p];
+				if (_filtered.empty()) {
+					res += "Unknown emoji!\n";
 				}
+				else {
+					//std::string _filtered = processed[2 + offset];
+					if (_filtered.size() > 2) {
+						if (_filtered.front() == '<') {
+							_filtered.erase(_filtered.begin());
+							if (_filtered.back() == '>') _filtered.pop_back();
+						}
+						else {
+							_filtered = transform_weirdo(_filtered);
+						}
+					}
 
-				bool proceed = true;
-				for (auto& i : react_to_copy)
-				{
-					if (i == _filtered) {
-						res = "Already in the list!";
-						proceed = false;
-						break;
+					bool proceed = true;
+					for (auto& i : react_to_copy)
+					{
+						if (i == _filtered) {
+							res = "`" + _filtered + "` already in the list!\n";
+							proceed = false;
+							//break;
+						}
 					}
-				}
-				if (proceed) {
-					react_to_copy.push_back(_filtered);
-					res = "Added " + _filtered + " to the list.";
+					if (proceed) {
+						react_to_copy.push_back(_filtered);
+						res += "Added `" + _filtered + "` to the list.\n";
+					}
 				}
 			}
 		}
 		else if (processed[1 + offset] == "remove") {
-			if (processed[2 + offset].empty()) {
-				res = "Unknown emoji!";
-			}
-			else {
-				std::string _filtered = processed[2 + offset];
-				if (_filtered.size() > 2) {
-					if (_filtered.front() == '<') {
-						_filtered.erase(_filtered.begin());
-						if (_filtered.back() == '>') _filtered.pop_back();
-					}
-					else {
-						_filtered = transform_weirdo(_filtered);
-					}
+			for (size_t p = 2 + offset; !processed[p].empty(); p++) {
+				std::string _filtered = processed[p];
+				if (_filtered.empty()) {
+					res += "Unknown emoji!\n";
 				}
+				else {
+					//std::string _filtered = processed[2 + offset];
+					if (_filtered.size() > 2) {
+						if (_filtered.front() == '<') {
+							_filtered.erase(_filtered.begin());
+							if (_filtered.back() == '>') _filtered.pop_back();
+						}
+						else {
+							_filtered = transform_weirdo(_filtered);
+						}
+					}
 
-				bool proceed = true;
-				for (size_t p = 0; p < react_to_copy.size(); p++)
-				{
-					if (react_to_copy[p] == _filtered)
+					bool proceed = true;
+					for (size_t p = 0; p < react_to_copy.size(); p++)
 					{
-						react_to_copy.erase(react_to_copy.begin() + p);
-						p--;
-						proceed = false;
-						res = "Removed successfully!";
+						if (react_to_copy[p] == _filtered)
+						{
+							react_to_copy.erase(react_to_copy.begin() + p);
+							p--;
+							proceed = false;
+							res += "Removed `" + _filtered + "` successfully!\n";
+						}
 					}
-				}
-				if (proceed) {
-					res = "Couldn't find the emoji from list!";
+					if (proceed) {
+						res += "Couldn't find `" + _filtered + "` from list!\n";
+					}
 				}
 			}
 		}
 		else if (processed[1 + offset] == "remove_all") {
 			react_to_copy.clear();
+			res = "Removed all reactions.";
 		}
 		else {
 			res += "Reacting to source: ";
@@ -773,70 +787,78 @@ std::string GuildHandle::_command_embed(std::unordered_map<size_t, std::string>&
 	}
 	else if (processed[offset] == "react") {
 		if (processed[1 + offset] == "add") {
-			if (processed[2 + offset].empty()) {
-				res = "Unknown emoji!";
-			}
-			else {
-				std::string _filtered = processed[2 + offset];
-				if (_filtered.size() > 2) {
-					if (_filtered.front() == '<') {
-						_filtered.erase(_filtered.begin());
-						if (_filtered.back() == '>') _filtered.pop_back();
-					}
-					else {
-						_filtered = transform_weirdo(_filtered);
-					}
-				}
+			for (size_t p = 2 + offset; !processed[p].empty(); p++) {
+				std::string _filtered = processed[p];
 
-				bool proceed = true;
-				for (auto& i : embed.auto_react_with)
-				{
-					if (i == _filtered) {
-						res = "Already in the list!";
-						proceed = false;
-						break;
-					}
+				if (_filtered.empty()) {
+					res += "Unknown emoji!\n";
 				}
-				if (proceed) {
-					embed.auto_react_with.push_back(_filtered);
-					res = "Added " + _filtered + " to the list.";
+				else {
+					//std::string _filtered = processed[2 + offset];
+					if (_filtered.size() > 2) {
+						if (_filtered.front() == '<') {
+							_filtered.erase(_filtered.begin());
+							if (_filtered.back() == '>') _filtered.pop_back();
+						}
+						else {
+							_filtered = transform_weirdo(_filtered);
+						}
+					}
+
+					bool proceed = true;
+					for (auto& i : embed.auto_react_with)
+					{
+						if (i == _filtered) {
+							res = "`" + _filtered + "` already in the list!\n";
+							proceed = false;
+							//break;
+						}
+					}
+					if (proceed) {
+						embed.auto_react_with.push_back(_filtered);
+						res += "Added `" + _filtered + "` to the list.\n";
+					}
 				}
 			}
 		}
 		else if (processed[1 + offset] == "remove") {
-			if (processed[2 + offset].empty()) {
-				res = "Unknown emoji!";
-			}
-			else {
-				std::string _filtered = processed[2 + offset];
-				if (_filtered.size() > 2) {
-					if (_filtered.front() == '<') {
-						_filtered.erase(_filtered.begin());
-						if (_filtered.back() == '>') _filtered.pop_back();
-					}
-					else {
-						_filtered = transform_weirdo(_filtered);
-					}
+			for (size_t p = 2 + offset; !processed[p].empty(); p++) {
+				std::string _filtered = processed[p];
+				if (_filtered.empty()) {
+					res += "Unknown emoji!\n";
 				}
+				else {
+					//std::string _filtered = processed[2 + offset];
+					if (_filtered.size() > 2) {
+						if (_filtered.front() == '<') {
+							_filtered.erase(_filtered.begin());
+							if (_filtered.back() == '>') _filtered.pop_back();
+						}
+						else {
+							_filtered = transform_weirdo(_filtered);
+						}
+					}
 
-				bool proceed = true;
-				for (size_t p = 0; p < embed.auto_react_with.size(); p++)
-				{
-					if (embed.auto_react_with[p] == _filtered)
+					bool proceed = true;
+					for (size_t p = 0; p < embed.auto_react_with.size(); p++)
 					{
-						embed.auto_react_with.erase(embed.auto_react_with.begin() + p);
-						p--;
-						proceed = false;
-						res = "Removed successfully!";
+						if (embed.auto_react_with[p] == _filtered)
+						{
+							embed.auto_react_with.erase(embed.auto_react_with.begin() + p);
+							p--;
+							proceed = false;
+							res += "Removed `" + _filtered + "` successfully!\n";
+						}
 					}
-				}
-				if (proceed) {
-					res = "Couldn't find the emoji from list!";
+					if (proceed) {
+						res += "Couldn't find `" + _filtered + "` from list!\n";
+					}
 				}
 			}
 		}
 		else if (processed[1 + offset] == "remove_all") {
 			embed.auto_react_with.clear();
+			res = "Removed all reactions.";
 		}
 		else {
 			res += "Reacting to source: ";
@@ -919,6 +941,20 @@ void GuildHandle::command(const std::string& arguments, aegis::channel& ch, aegi
 				); // ).then<void>(autodie);
 				return;
 			}
+		}
+
+		else if (processed[0] == "restart" && mee_dev == from.author.id) {
+			/*ch.create_message(
+				u8"Alright, bot restarting, chief!"
+			).get(); // ).then<void>(autodie);*/
+			from.create_reaction(emoji_yes, false).get();
+
+			std::this_thread::sleep_for(std::chrono::milliseconds(200));
+			core->update_presence(default_command_start + " - restarting...", aegis::gateway::objects::activity::Game, aegis::gateway::objects::presence::Idle);
+			std::this_thread::sleep_for(std::chrono::milliseconds(500));
+			core->shutdown();
+
+			return;
 		}
 
 		else if (processed[0] == "alias") {
@@ -1816,39 +1852,39 @@ void GuildHandle::command(const std::string& arguments, aegis::channel& ch, aegi
 			{ "title", "***LINK***" },
 			{ "color", default_color },
 			{ "description",
-				u8"`link [select <order>] ...                              `\n"
-				u8"`                      delete <CONFIRM>                 `\n"
-				u8"`                      handling <MODE>                  `\n"
-				u8"`                      silence_links <true|false>       `\n"
-				u8"`                      silence_codeblock <true|false>   `\n"
-				u8"`                      match <string>                   `\n"
-				u8"`                      match_regex <true|false>         `\n"
-				u8"`                      inverse_regex <true|false>       `\n"
-				u8"`                      send_to <id>                     `\n"
-				u8"`                      react ...                        `\n"
-				u8"`                            source ...                 `\n"
-				u8"`                                   add <emoji>         `\n"
-				u8"`                                   remove <emoji>      `\n"
-				u8"`                                   remove_all          `\n"
-				u8"`                            destination ...            `\n"
-				u8"`                                        add <emoji>    `\n"
-				u8"`                                        remove <emoji> `\n"
-				u8"`                                        remove_all     `\n"
-				u8"`                      embed ...                        `\n"
-				u8"`                            show_thumbnail <true|false>`\n"
-				u8"`                            thumbnail_override <url>   `\n"
-				u8"`                            show_user <true|false>     `\n"
-				u8"`                            max_length <unsigned>      `\n"
-				u8"`                            markdown_text <true|false> `\n"
-				u8"`                            reference_link <true|false>`\n"
-				u8"`                            reference_chat <true|false>`\n"
-				u8"`                            reference_text <string>    `\n"
-				u8"`                            send_to <id>               `\n"
-				u8"`                            priority <int>             `\n"
-				u8"`                            react ...                  `\n"
-				u8"`                                  add <emoji>          `\n"
-				u8"`                                  remove <emoji>       `\n"
-				u8"`                                  remove_all           `\n"
+				u8"`link [select <order>] ...                                `\n"
+				u8"`                      delete <CONFIRM>                   `\n"
+				u8"`                      handling <MODE>                    `\n"
+				u8"`                      silence_links <true|false>         `\n"
+				u8"`                      silence_codeblock <true|false>     `\n"
+				u8"`                      match <string>                     `\n"
+				u8"`                      match_regex <true|false>           `\n"
+				u8"`                      inverse_regex <true|false>         `\n"
+				u8"`                      send_to <id>                       `\n"
+				u8"`                      react ...                          `\n"
+				u8"`                            source ...                   `\n"
+				u8"`                                   add <emoji...>        `\n"
+				u8"`                                   remove <emoji...>     `\n"
+				u8"`                                   remove_all            `\n"
+				u8"`                            destination ...              `\n"
+				u8"`                                        add <emoji...>   `\n"
+				u8"`                                        remove <emoji...>`\n"
+				u8"`                                        remove_all       `\n"
+				u8"`                      embed ...                          `\n"
+				u8"`                            show_thumbnail <true|false>  `\n"
+				u8"`                            thumbnail_override <url>     `\n"
+				u8"`                            show_user <true|false>       `\n"
+				u8"`                            max_length <unsigned>        `\n"
+				u8"`                            markdown_text <true|false>   `\n"
+				u8"`                            reference_link <true|false>  `\n"
+				u8"`                            reference_chat <true|false>  `\n"
+				u8"`                            reference_text <string>      `\n"
+				u8"`                            send_to <id>                 `\n"
+				u8"`                            priority <int>               `\n"
+				u8"`                            react ...                    `\n"
+				u8"`                                  add <emoji...>         `\n"
+				u8"`                                  remove <emoji...>      `\n"
+				u8"`                                  remove_all             `\n"
 			}
 		}); // ).then<void>(autodie);
 	}
@@ -1858,39 +1894,39 @@ void GuildHandle::command(const std::string& arguments, aegis::channel& ch, aegi
 			{ "title", "***FILE***" },
 			{ "color", default_color },
 			{ "description",
-				u8"`file [select <order>] ...                              `\n"
-				u8"`                      delete <CONFIRM>                 `\n"
-				u8"`                      handling <MODE>                  `\n"
-				u8"`                      match <string>                   `\n"
-				u8"`                      match_regex <true|false>         `\n"
-				u8"`                      inverse_regex <true|false>       `\n"
-				u8"`                      minimum_file_size <unsigned>     `\n"
-				u8"`                      maximum_file_size <unsigned>     `\n"
-				u8"`                      send_to <id>                     `\n"
-				u8"`                      react ...                        `\n"
-				u8"`                            source ...                 `\n"
-				u8"`                                   add <emoji>         `\n"
-				u8"`                                   remove <emoji>      `\n"
-				u8"`                                   remove_all          `\n"
-				u8"`                            destination ...            `\n"
-				u8"`                                        add <emoji>    `\n"
-				u8"`                                        remove <emoji> `\n"
-				u8"`                                        remove_all     `\n"
-				u8"`                      embed ...                        `\n"
-				u8"`                            show_thumbnail <true|false>`\n"
-				u8"`                            thumbnail_override <url>   `\n"
-				u8"`                            show_user <true|false>     `\n"
-				u8"`                            max_length <unsigned>      `\n"
-				u8"`                            markdown_text <true|false> `\n"
-				u8"`                            reference_link <true|false>`\n"
-				u8"`                            reference_chat <true|false>`\n"
-				u8"`                            reference_text <string>    `\n"
-				u8"`                            send_to <id>               `\n"
-				u8"`                            priority <int>             `\n"
-				u8"`                            react ...                  `\n"
-				u8"`                                  add <emoji>          `\n"
-				u8"`                                  remove <emoji>       `\n"
-				u8"`                                  remove_all           `\n"
+				u8"`file [select <order>] ...                                 `\n"
+				u8"`                      delete <CONFIRM>                    `\n"
+				u8"`                      handling <MODE>                     `\n"
+				u8"`                      match <string>                      `\n"
+				u8"`                      match_regex <true|false>            `\n"
+				u8"`                      inverse_regex <true|false>          `\n"
+				u8"`                      minimum_file_size <unsigned>        `\n"
+				u8"`                      maximum_file_size <unsigned>        `\n"
+				u8"`                      send_to <id>                        `\n"
+				u8"`                      react ...                           `\n"
+				u8"`                            source ...                    `\n"
+				u8"`                                   add <emoji...>         `\n"
+				u8"`                                   remove <emoji...>      `\n"
+				u8"`                                   remove_all             `\n"
+				u8"`                            destination ...               `\n"
+				u8"`                                        add <emoji...>    `\n"
+				u8"`                                        remove <emoji...> `\n"
+				u8"`                                        remove_all        `\n"
+				u8"`                      embed ...                           `\n"
+				u8"`                            show_thumbnail <true|false>   `\n"
+				u8"`                            thumbnail_override <url>      `\n"
+				u8"`                            show_user <true|false>        `\n"
+				u8"`                            max_length <unsigned>         `\n"
+				u8"`                            markdown_text <true|false>    `\n"
+				u8"`                            reference_link <true|false>   `\n"
+				u8"`                            reference_chat <true|false>   `\n"
+				u8"`                            reference_text <string>       `\n"
+				u8"`                            send_to <id>                  `\n"
+				u8"`                            priority <int>                `\n"
+				u8"`                            react ...                     `\n"
+				u8"`                                  add <emoji...>          `\n"
+				u8"`                                  remove <emoji...>       `\n"
+				u8"`                                  remove_all              `\n"
 			}
 		}); // ).then<void>(autodie);
 	}
@@ -1900,40 +1936,40 @@ void GuildHandle::command(const std::string& arguments, aegis::channel& ch, aegi
 			{ "title", "***TEXT***" },
 			{ "color", default_color },
 			{ "description",
-				u8"`text [select <order>] ...                              `\n"
-				u8"`                      delete <CONFIRM>                 `\n"
-				u8"`                      ignore_links <true|false>        `\n"
-				u8"`                      ignore_files <true|false>        `\n"
-				u8"`                      handling <MODE>                  `\n"
-				u8"`                      silence_codeblock <true|false>   `\n"
-				u8"`                      match <string>                   `\n"
-				u8"`                      match_regex <true|false>         `\n"
-				u8"`                      inverse_regex <true|false>       `\n"
-				u8"`                      send_to <id>                     `\n"
-				u8"`                      react ...                        `\n"
-				u8"`                            source ...                 `\n"
-				u8"`                                   add <emoji>         `\n"
-				u8"`                                   remove <emoji>      `\n"
-				u8"`                                   remove_all          `\n"
-				u8"`                            destination ...            `\n"
-				u8"`                                        add <emoji>    `\n"
-				u8"`                                        remove <emoji> `\n"
-				u8"`                                        remove_all     `\n"
-				u8"`                      embed ...                        `\n"
-				u8"`                            show_thumbnail <true|false>`\n"
-				u8"`                            thumbnail_override <url>   `\n"
-				u8"`                            show_user <true|false>     `\n"
-				u8"`                            max_length <unsigned>      `\n"
-				u8"`                            markdown_text <true|false> `\n"
-				u8"`                            reference_link <true|false>`\n"
-				u8"`                            reference_chat <true|false>`\n"
-				u8"`                            reference_text <string>    `\n"
-				u8"`                            send_to <id>               `\n"
-				u8"`                            priority <int>             `\n"
-				u8"`                            react ...                  `\n"
-				u8"`                                  add <emoji>          `\n"
-				u8"`                                  remove <emoji>       `\n"
-				u8"`                                  remove_all           `\n"
+				u8"`text [select <order>] ...                                 `\n"
+				u8"`                      delete <CONFIRM>                    `\n"
+				u8"`                      ignore_links <true|false>           `\n"
+				u8"`                      ignore_files <true|false>           `\n"
+				u8"`                      handling <MODE>                     `\n"
+				u8"`                      silence_codeblock <true|false>      `\n"
+				u8"`                      match <string>                      `\n"
+				u8"`                      match_regex <true|false>            `\n"
+				u8"`                      inverse_regex <true|false>          `\n"
+				u8"`                      send_to <id>                        `\n"
+				u8"`                      react ...                           `\n"
+				u8"`                            source ...                    `\n"
+				u8"`                                   add <emoji...>         `\n"
+				u8"`                                   remove <emoji...>      `\n"
+				u8"`                                   remove_all             `\n"
+				u8"`                            destination ...               `\n"
+				u8"`                                        add <emoji...>    `\n"
+				u8"`                                        remove <emoji...> `\n"
+				u8"`                                        remove_all        `\n"
+				u8"`                      embed ...                           `\n"
+				u8"`                            show_thumbnail <true|false>   `\n"
+				u8"`                            thumbnail_override <url>      `\n"
+				u8"`                            show_user <true|false>        `\n"
+				u8"`                            max_length <unsigned>         `\n"
+				u8"`                            markdown_text <true|false>    `\n"
+				u8"`                            reference_link <true|false>   `\n"
+				u8"`                            reference_chat <true|false>   `\n"
+				u8"`                            reference_text <string>       `\n"
+				u8"`                            send_to <id>                  `\n"
+				u8"`                            priority <int>                `\n"
+				u8"`                            react ...                     `\n"
+				u8"`                                  add <emoji...>          `\n"
+				u8"`                                  remove <emoji...>       `\n"
+				u8"`                                  remove_all              `\n"
 			}
 		}); // ).then<void>(autodie);
 	}
@@ -2041,7 +2077,7 @@ Tools::Future<aegis::gateway::objects::message> GuildHandle::copy_generate_embed
 
 		return ch->create_message_embed({}, j).then<aegis::gateway::objects::message>([=](aegis::gateway::objects::message m) {
 			for (auto& j : cc.auto_react_with) {
-				m.create_reaction(j).get();
+				m.create_reaction(j, false).get();
 			}
 			return m;
 		});
@@ -2159,7 +2195,7 @@ void GuildHandle::handle(aegis::channel& ch, aegis::gateway::objects::message m)
 					switch (cc.handling) {
 					case handle_modes::NONE:
 					{
-						for (auto& j : cc.react_to_source) m.create_reaction(j).get();
+						for (auto& j : cc.react_to_source) m.create_reaction(j, false).get();
 					}
 						break;
 
@@ -2177,14 +2213,14 @@ void GuildHandle::handle(aegis::channel& ch, aegis::gateway::objects::message m)
 
 					case handle_modes::COPY_SOURCE:
 					{
-						for (auto& j : cc.react_to_source) m.create_reaction(j).get();
+						for (auto& j : cc.react_to_source) m.create_reaction(j, false).get();
 
 						bool gottem = false;
 						auto fut = copy_message_to(gottem, cc.chat_to_send, m, cc.silence_codeblock, cc.silence_links);
 						if (gottem) {
 							fut.then<void>([=](aegis::gateway::objects::message m) {
 								for (auto& j : cc.react_to_copy) {
-									m.create_reaction(j).get();
+									m.create_reaction(j, false).get();
 								}
 							});
 						}
@@ -2210,7 +2246,7 @@ void GuildHandle::handle(aegis::channel& ch, aegis::gateway::objects::message m)
 						if (gottem) {
 							auto m3 = fut.get();
 							for (auto& j : cc.react_to_copy) {
-								m3.create_reaction(j).get();
+								m3.create_reaction(j, false).get();
 							}
 
 							if (!embed_set_to_do || cc.embed_settings.priority > embed_set_highest_value) {
@@ -2288,7 +2324,7 @@ void GuildHandle::handle(aegis::channel& ch, aegis::gateway::objects::message m)
 						switch (cc.handling) {
 						case handle_modes::NONE:
 						{
-							for (auto& j : cc.react_to_source) m.create_reaction(j).get();
+							for (auto& j : cc.react_to_source) m.create_reaction(j, false).get();
 						}
 						break;
 
@@ -2349,7 +2385,7 @@ void GuildHandle::handle(aegis::channel& ch, aegis::gateway::objects::message m)
 							if (gottem) {								
 								fut2.then<void>([=](aegis::gateway::objects::message m) {
 									for (auto& j : cc.react_to_copy) {
-										m.create_reaction(j).get();
+										m.create_reaction(j, false).get();
 									}
 								});
 							}
@@ -2413,7 +2449,7 @@ void GuildHandle::handle(aegis::channel& ch, aegis::gateway::objects::message m)
 							if (gottem) {
 								auto m3 = fut2.get();
 								for (auto& j : cc.react_to_copy) {
-									m3.create_reaction(j).get();
+									m3.create_reaction(j, false).get();
 								}
 								// asdasdasd
 
@@ -2488,7 +2524,7 @@ void GuildHandle::handle(aegis::channel& ch, aegis::gateway::objects::message m)
 					switch (cc.handling) {
 					case handle_modes::NONE:
 					{
-						for (auto& j : cc.react_to_source) m.create_reaction(j).get();
+						for (auto& j : cc.react_to_source) m.create_reaction(j, false).get();
 					}
 						break;
 
@@ -2506,14 +2542,14 @@ void GuildHandle::handle(aegis::channel& ch, aegis::gateway::objects::message m)
 
 					case handle_modes::COPY_SOURCE:
 					{
-						for (auto& j : cc.react_to_source) m.create_reaction(j);
+						for (auto& j : cc.react_to_source) m.create_reaction(j, false);
 
 						bool gottem = false;
 						auto fut = copy_message_to(gottem, cc.chat_to_send, m, cc.silence_codeblock, false);
 						if (gottem) {
 							fut.then<void>([=](aegis::gateway::objects::message m) {
 								for (auto& j : cc.react_to_copy) {
-									m.create_reaction(j).get();
+									m.create_reaction(j, false).get();
 								}
 							});
 						}
@@ -2539,7 +2575,7 @@ void GuildHandle::handle(aegis::channel& ch, aegis::gateway::objects::message m)
 						if (gottem) {
 							auto m3 = fut.get();
 							for (auto& j : cc.react_to_copy) {
-								m3.create_reaction(j).get();
+								m3.create_reaction(j, false).get();
 							}
 
 							if (!embed_set_to_do || cc.embed_settings.priority > embed_set_highest_value) {
@@ -2622,7 +2658,8 @@ void GuildHandle::handle(aegis::channel& ch, const unsigned long long mid, aegis
 					else {
 						//logg->info("Emoji: got ADD.");
 						ch.create_reaction(msg.get_id(),
-							e.id ? ((e.animated ? "a:" : "") + e.name + ":" + std::to_string(e.id)) : (transform_weirdo(e.name))
+							e.id ? ((e.animated ? "a:" : "") + e.name + ":" + std::to_string(e.id)) : (transform_weirdo(e.name)),
+							false
 						);
 					}
 				}
@@ -2636,7 +2673,7 @@ void GuildHandle::handle(aegis::channel& ch, const unsigned long long mid, aegis
 							}
 						}
 					}
-					if (!skip_) ch.delete_user_reaction(msg.get_id(), e.id ? ((e.animated ? "a:" : "") + e.name + ":" + std::to_string(e.id)) : (transform_weirdo(e.name)), e.user);
+					if (!skip_) ch.delete_user_reaction(msg.get_id(), e.id ? ((e.animated ? "a:" : "") + e.name + ":" + std::to_string(e.id)) : (transform_weirdo(e.name)), e.user, false);
 				}
 			}
 		}
