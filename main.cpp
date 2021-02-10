@@ -82,17 +82,17 @@ int main() {
 		}
 
 		//obj.msg = result["d"];
-		_sticker_addon sticker;
-		bool has_sticker = false;
+		std::vector<_sticker_addon> stickers;
 		if (result["d"].count("stickers") && !result["d"]["stickers"].is_null()) {
-			has_sticker = true;
-			sticker.from_json(result["d"]["stickers"]);
+			for (const auto& st : result["d"]["stickers"]) {
+				stickers.push_back(st);
+			}
 		}
 
 		for (auto& i : guilds) {
 			if (*i == obj.channel.get_guild_id()) {
 
-				if (has_sticker) i->handle(obj.channel, obj.msg, sticker); // nowadays it is sticker OR message/attachment.
+				if (stickers.size()) for(auto& s : stickers) i->handle(obj.channel, obj.msg, s); // nowadays it is sticker OR message/attachment.
 				else i->handle(obj.channel, obj.msg);
 
 				return;

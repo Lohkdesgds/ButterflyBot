@@ -1,16 +1,6 @@
 #include "guild_handler.h"
 
 
-void _sticker_addon::from_json(const nlohmann::json& j)
-{
-	if (j.count("id") && !j["id"].is_null())						id = j["id"];
-	if (j.count("pack_id") && !j["pack_id"].is_null())				pack_id = j["pack_id"];
-	if (j.count("name") && !j["name"].is_null())					name = j["name"];
-	if (j.count("description") && !j["description"].is_null())		description = j["description"];
-	if (j.count("tags") && !j["tags"].is_null())					tags = j["tags"];
-}
-
-
 bool interpret_handle_modes(handle_modes& m, const std::string& str)
 {
 	if (str == "NONE") {
@@ -318,6 +308,7 @@ void chat_configuration::stickers_configuration::from_json(const nlohmann::json&
 	if (j.count("has_to_match_this") && !j["has_to_match_this"].is_null())											has_to_match_this = j["has_to_match_this"].get<std::string>();
 	if (j.count("use_regex") && !j["use_regex"].is_null())															use_regex = j["use_regex"].get<bool>();
 	if (j.count("inverse_regex") && !j["inverse_regex"].is_null())													inverse_regex = j["inverse_regex"].get<bool>();
+	if (j.count("debug_id") && !j["debug_id"].is_null())															debug_id = j["debug_id"].get<bool>();
 
 	if (j.count("react_to_source") && !j["react_to_source"].is_null()) {
 		for (const auto& _field : j["react_to_source"])
@@ -340,6 +331,7 @@ nlohmann::json chat_configuration::stickers_configuration::to_json() const
 	j["has_to_match_this"] = has_to_match_this;
 	j["use_regex"] = use_regex;
 	j["inverse_regex"] = inverse_regex;
+	j["debug_id"] = debug_id;
 
 	for (const auto& _field : react_to_source)
 		j["react_to_source"].push_back(_field);
@@ -744,7 +736,7 @@ std::string GuildHandle::_command_snowflake_submodule(std::unordered_map<size_t,
 	else {
 		res += "In list: ";
 		for (auto& i : list) {
-			res += i + ' ';
+			res += "`" + std::to_string(i) + "` ";
 		}
 	}
 
@@ -1300,6 +1292,14 @@ void GuildHandle::command(const std::string& arguments, aegis::channel& ch, aegi
 						return;
 					}
 				}
+				else if (processed[1 + offset] == "reset_match") {
+					actual.has_to_match_this.clear();
+					ch.create_message(
+						u8"Match value is now empty."
+					); // ).then<void>(autodie);
+					data.save_nolock();
+					return;
+				}
 				else if (processed[1 + offset] == "match_regex") {
 					if (processed[2 + offset].empty()) {
 						ch.create_message(
@@ -1498,6 +1498,14 @@ void GuildHandle::command(const std::string& arguments, aegis::channel& ch, aegi
 						data.save_nolock();
 						return;
 					}
+				}
+				else if (processed[1 + offset] == "reset_match") {
+					actual.has_to_match_this.clear();
+					ch.create_message(
+						u8"Match value is now empty."
+					); // ).then<void>(autodie);
+					data.save_nolock();
+					return;
 				}
 				else if (processed[1 + offset] == "match_regex") {
 					if (processed[2 + offset].empty()) {
@@ -1779,6 +1787,14 @@ void GuildHandle::command(const std::string& arguments, aegis::channel& ch, aegi
 						return;
 					}
 				}
+				else if (processed[1 + offset] == "reset_match") {
+					actual.has_to_match_this.clear();
+					ch.create_message(
+						u8"Match value is now empty."
+					); // ).then<void>(autodie);
+					data.save_nolock();
+					return;
+				}
 				else if (processed[1 + offset] == "match_regex") {
 					if (processed[2 + offset].empty()) {
 						ch.create_message(
@@ -1990,6 +2006,14 @@ void GuildHandle::command(const std::string& arguments, aegis::channel& ch, aegi
 						return;
 					}
 				}
+				else if (processed[1 + offset] == "reset_match") {
+					actual.has_to_match_this.clear();
+					ch.create_message(
+						u8"Match value is now empty."
+					); // ).then<void>(autodie);
+					data.save_nolock();
+					return;
+				}
 				else if (processed[1 + offset] == "match_regex") {
 					if (processed[2 + offset].empty()) {
 						ch.create_message(
@@ -2001,6 +2025,22 @@ void GuildHandle::command(const std::string& arguments, aegis::channel& ch, aegi
 						actual.use_regex = (processed[2 + offset] == "true");
 						ch.create_message(
 							u8"Match_regex value set: " + std::string(actual.use_regex ? "true" : "false")
+						); // ).then<void>(autodie);
+						data.save_nolock();
+						return;
+					}
+				}
+				else if (processed[1 + offset] == "debug_id") {
+					if (processed[2 + offset].empty()) {
+						ch.create_message(
+							u8"Debug value: " + std::string(actual.debug_id ? "true" : "false")
+						); // ).then<void>(autodie);
+						return;
+					}
+					else {
+						actual.debug_id = (processed[2 + offset] == "true");
+						ch.create_message(
+							u8"Debug value set: " + std::string(actual.debug_id ? "true" : "false")
 						); // ).then<void>(autodie);
 						data.save_nolock();
 						return;
@@ -2144,6 +2184,7 @@ void GuildHandle::command(const std::string& arguments, aegis::channel& ch, aegi
 				u8"`  silence_links <true|false>    `\n"
 				u8"`  silence_codeblock <true|false>`\n"
 				u8"`  match <string>                `\n"
+				u8"`  reset_match                   `\n"
 				u8"`  match_regex <true|false>      `\n"
 				u8"`  inverse_regex <true|false>    `\n"
 				u8"`  send_to <id>                  `\n"
@@ -2184,6 +2225,7 @@ void GuildHandle::command(const std::string& arguments, aegis::channel& ch, aegi
 				u8"`  delete <CONFIRM>              `\n"
 				u8"`  handling <MODE>               `\n"
 				u8"`  match <string>                `\n"
+				u8"`  reset_match                   `\n"
 				u8"`  match_regex <true|false>      `\n"
 				u8"`  inverse_regex <true|false>    `\n"
 				u8"`  minimum_file_size <unsigned>  `\n"
@@ -2229,6 +2271,7 @@ void GuildHandle::command(const std::string& arguments, aegis::channel& ch, aegi
 				u8"`  handling <MODE>               `\n"
 				u8"`  silence_codeblock <true|false>`\n"
 				u8"`  match <string>                `\n"
+				u8"`  reset_match                   `\n"
 				u8"`  match_regex <true|false>      `\n"
 				u8"`  inverse_regex <true|false>    `\n"
 				u8"`  send_to <id>                  `\n"
@@ -2269,6 +2312,8 @@ void GuildHandle::command(const std::string& arguments, aegis::channel& ch, aegi
 				u8"`  delete <CONFIRM>              `\n"
 				u8"`  handling <MODE>               `\n"
 				u8"`  match <string>                `\n"
+				u8"`  reset_match                   `\n"
+				u8"`  debug_id <true|false>         `\n"
 				u8"`  match_regex <true|false>      `\n"
 				u8"`  inverse_regex <true|false>    `\n"
 				u8"`  react ...                     `\n"
@@ -2484,28 +2529,29 @@ void GuildHandle::handle(aegis::channel& ch, aegis::gateway::objects::message m)
 		if (has_link) {
 			for (auto& cc : here.link_configurations) {
 				bool match = false;
-				if (cc.use_regex) {
-					try {
-						std::regex rex(cc.has_to_match_this);
-						match = std::regex_search(content_lower, rex);
-						if (cc.inverse_regex) match = !match;
-					}
-					catch (const std::regex_error& e) {
-						if (data.on_error_delete_source) m.delete_message();
-						ch.create_message("[LINK] Failed doing regex here with format = '" + cc.has_to_match_this + "'. Ignored REGEX. Bot gave up.")
-							.then<void>([](aegis::gateway::objects::message mm) {
+				if (!cc.has_to_match_this.empty()) {
+					if (cc.use_regex) {
+						try {
+							std::regex rex(cc.has_to_match_this);
+							match = std::regex_search(content_lower, rex);
+							if (cc.inverse_regex) match = !match;
+						}
+						catch (const std::regex_error& e) {
+							if (data.on_error_delete_source) m.delete_message();
+							ch.create_message("[LINK] Failed doing regex here with format = '" + cc.has_to_match_this + "'. Ignored REGEX. Bot gave up.")
+								.then<void>([](aegis::gateway::objects::message mm) {
 								std::this_thread::sleep_for(std::chrono::seconds(20));
 								mm.delete_message();
-							});
-						return;
+									});
+							return;
+						}
 					}
-				}
-				else {
-					match = content_lower.find(cc.has_to_match_this) != std::string::npos;
+					else {
+						match = content_lower.find(cc.has_to_match_this) != std::string::npos;
+					}
 				}
 
 				if (match) {
-
 					switch (cc.handling) {
 					case handle_modes::NONE:
 					{
@@ -2613,28 +2659,29 @@ void GuildHandle::handle(aegis::channel& ch, aegis::gateway::objects::message m)
 
 				for (auto& cc : here.file_configurations) {
 					bool match = false;
-					if (cc.use_regex) {
-						try {
-							std::regex rex(cc.has_to_match_this);
-							match = std::regex_search(filename_lower, rex);
-							if (cc.inverse_regex) match = !match;
-						}
-						catch (const std::regex_error& e) {
-							if (data.on_error_delete_source) m.delete_message();
-							ch.create_message("[FILE] Failed doing regex here with format = '" + cc.has_to_match_this + "'. Ignored REGEX. Bot gave up.")
-								.then<void>([](aegis::gateway::objects::message mm) {
+					if (!cc.has_to_match_this.empty()) {
+						if (cc.use_regex) {
+							try {
+								std::regex rex(cc.has_to_match_this);
+								match = std::regex_search(filename_lower, rex);
+								if (cc.inverse_regex) match = !match;
+							}
+							catch (const std::regex_error& e) {
+								if (data.on_error_delete_source) m.delete_message();
+								ch.create_message("[FILE] Failed doing regex here with format = '" + cc.has_to_match_this + "'. Ignored REGEX. Bot gave up.")
+									.then<void>([](aegis::gateway::objects::message mm) {
 									std::this_thread::sleep_for(std::chrono::seconds(20));
 									mm.delete_message();
-								});
-							return;
+										});
+								return;
+							}
 						}
-					}
-					else {
-						match = filename_lower.find(cc.has_to_match_this) != std::string::npos;
+						else {
+							match = filename_lower.find(cc.has_to_match_this) != std::string::npos;
+						}
 					}
 
 					if (match) {
-
 						switch (cc.handling) {
 						case handle_modes::NONE:
 						{
@@ -2813,28 +2860,29 @@ void GuildHandle::handle(aegis::channel& ch, aegis::gateway::objects::message m)
 				if (cc.no_links_please && has_link) continue; // skip if ignore links
 				if (cc.no_files_please && has_file) continue; // skip if ignore files
 				
-				if (cc.use_regex) {
-					try {
-						std::regex rex(cc.has_to_match_this);
-						match = std::regex_search(content_lower, rex);
-						if (cc.inverse_regex) match = !match;
-					}
-					catch (const std::regex_error& e) {
-						if (data.on_error_delete_source) m.delete_message();
-						ch.create_message("[TEXT] Failed doing regex here with format = '" + cc.has_to_match_this + "'. Ignored REGEX. Bot gave up.")
-							.then<void>([](aegis::gateway::objects::message mm) {
+				if (!cc.has_to_match_this.empty()) {
+					if (cc.use_regex) {
+						try {
+							std::regex rex(cc.has_to_match_this);
+							match = std::regex_search(content_lower, rex);
+							if (cc.inverse_regex) match = !match;
+						}
+						catch (const std::regex_error& e) {
+							if (data.on_error_delete_source) m.delete_message();
+							ch.create_message("[TEXT] Failed doing regex here with format = '" + cc.has_to_match_this + "'. Ignored REGEX. Bot gave up.")
+								.then<void>([](aegis::gateway::objects::message mm) {
 								std::this_thread::sleep_for(std::chrono::seconds(20));
 								mm.delete_message();
-							});
-						return;
+									});
+							return;
+						}
 					}
-				}
-				else {
-					match = content_lower.find(cc.has_to_match_this) != std::string::npos;
+					else {
+						match = content_lower.find(cc.has_to_match_this) != std::string::npos;
+					}
 				}
 
 				if (match) {
-
 					switch (cc.handling) {
 					case handle_modes::NONE:
 					{
@@ -3009,6 +3057,7 @@ void GuildHandle::handle(aegis::channel& ch, aegis::gateway::objects::message m,
 	LockGuardShared luck2(here.secure, lock_shared_mode::SHARED);
 
 	for (auto& cc : here.stickers_configurations) {
+
 		bool match = false;
 
 		for (auto& i : cc.match_packs_ids) {
@@ -3027,7 +3076,7 @@ void GuildHandle::handle(aegis::channel& ch, aegis::gateway::objects::message m,
 			}
 		}
 
-		if (!match) { // cheap
+		if (!match && !cc.has_to_match_this.empty()) { // cheap
 			if (cc.use_regex) {
 				try {
 					std::regex rex(cc.has_to_match_this);
@@ -3050,6 +3099,19 @@ void GuildHandle::handle(aegis::channel& ch, aegis::gateway::objects::message m,
 		}
 
 		if (match) {
+
+			if (cc.debug_id) {
+				ch.create_message(
+					u8"```md\n"
+					u8"# STICKER INFORMATION #\n"
+					u8"- Sticker name: \"" + sticker.name + u8"\"\n"
+					u8"- Sticker ID:   " + std::to_string(sticker.id) + u8"\n"
+					u8"- Pack ID:      " + std::to_string(sticker.pack_id) + u8"\n"
+					u8"- Sticker desc: \"" + sticker.description + u8"\"\n"
+					u8"- Sticker tags: \"" + sticker.tags + u8"\"\n"
+					u8"````this message was shown because debug_id flag is enabled`"
+				);
+			}
 
 			switch (cc.handling) {
 			case handle_modes::NONE:

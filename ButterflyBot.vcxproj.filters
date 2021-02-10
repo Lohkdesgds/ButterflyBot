@@ -21,6 +21,9 @@
     <ClCompile Include="download\downloader.cpp">
       <Filter>IMPORT:Downloader</Filter>
     </ClCompile>
+    <ClCompile Include="sticker_addon.cpp">
+      <Filter>Working On</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="guild_handler.h">
@@ -28,6 +31,9 @@
     </ClInclude>
     <ClInclude Include="download\downloader.h">
       <Filter>IMPORT:Downloader</Filter>
+    </ClInclude>
+    <ClInclude Include="sticker_addon.h">
+      <Filter>Working On</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

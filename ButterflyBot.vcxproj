@@ -13,11 +13,13 @@
   <ItemGroup>
     <ClInclude Include="download\downloader.h" />
     <ClInclude Include="guild_handler.h" />
+    <ClInclude Include="sticker_addon.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="download\downloader.cpp" />
     <ClCompile Include="guild_handler.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="sticker_addon.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>

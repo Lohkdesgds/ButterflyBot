@@ -4,7 +4,9 @@
 #include <unordered_map>
 
 #include <aegis.hpp>
+
 #include "download/downloader.h"
+#include "sticker_addon.h"
 
 using namespace LSW::v5;
 
@@ -12,7 +14,7 @@ constexpr size_t maximum_file_size_global = 8e6;
 constexpr size_t maximum_rules_vector_per_chat_per_type = 10;
 const std::string default_command_start = "lsw/bb";
 constexpr size_t safe_msg_limit = 1998;
-const std::string version = "V3.1.0";
+const std::string version = "V3.1.1";
 
 const auto default_color = 0xA321FF;
 const size_t str_max_len_embed_default = 60;
@@ -34,19 +36,6 @@ enum class handle_modes {NONE, DELETE_SOURCE, COPY_SOURCE, CUT_SOURCE, CUT_AND_R
 enum class lock_shared_mode {SHARED, EXCLUSIVE};
 
 enum class help_type{ALL, GLOBAL, LINK, FILE, TEXT, STICKER, MODES};
-
-struct _sticker_addon {
-	aegis::snowflake id;//	snowflake	id of the sticker
-	aegis::snowflake pack_id;//	snowflake	id of the pack the sticker is from
-	std::string name;//	string	name of the sticker
-	std::string description;//	string	description of the sticker
-	std::string tags;// ? string	a comma - separated list of tags for the sticker
-	//std::string asset;// *string	sticker asset hash
-	//std::string preview_asset;// *? string	sticker preview asset hash
-	//int format_type; //	integer	type of sticker format
-
-	void from_json(const nlohmann::json&);
-};
 
 
 /// <summary>
@@ -200,6 +189,7 @@ struct chat_configuration {
 		std::vector<unsigned long long> match_ids; // stickers id
 		std::vector<unsigned long long> match_packs_ids; // stickers id
 		std::vector<std::string> react_to_source; // what emojis to react to source (if still exists)
+		bool debug_id = false; // show pack id and sticker id
 
 		void from_json(const nlohmann::json&);
 		nlohmann::json to_json() const;
