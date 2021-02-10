@@ -12,7 +12,7 @@ constexpr size_t maximum_file_size_global = 8e6;
 constexpr size_t maximum_rules_vector_per_chat_per_type = 10;
 const std::string default_command_start = "lsw/bb";
 constexpr size_t safe_msg_limit = 1998;
-const std::string version = "V3.0.3";
+const std::string version = "V3.1.0";
 
 const auto default_color = 0xA321FF;
 const size_t str_max_len_embed_default = 60;
@@ -33,7 +33,20 @@ const std::string emoji_yes		= u8"%E2%9C%85"; //aegis::utility::url_encode(u8"âœ
 enum class handle_modes {NONE, DELETE_SOURCE, COPY_SOURCE, CUT_SOURCE, CUT_AND_REFERENCE_BACK_EMBED};
 enum class lock_shared_mode {SHARED, EXCLUSIVE};
 
-enum class help_type{ALL, GLOBAL, LINK, FILE, TEXT, MODES};
+enum class help_type{ALL, GLOBAL, LINK, FILE, TEXT, STICKER, MODES};
+
+struct _sticker_addon {
+	aegis::snowflake id;//	snowflake	id of the sticker
+	aegis::snowflake pack_id;//	snowflake	id of the pack the sticker is from
+	std::string name;//	string	name of the sticker
+	std::string description;//	string	description of the sticker
+	std::string tags;// ? string	a comma - separated list of tags for the sticker
+	//std::string asset;// *string	sticker asset hash
+	//std::string preview_asset;// *? string	sticker preview asset hash
+	//int format_type; //	integer	type of sticker format
+
+	void from_json(const nlohmann::json&);
+};
 
 
 /// <summary>
@@ -178,10 +191,28 @@ struct chat_configuration {
 		texts_configuration(const nlohmann::json&);
 	};
 
+	// triggers with ANY text (including links)
+	struct stickers_configuration {
+		handle_modes handling = handle_modes::NONE; // if someone sends a file, do nothing, delete, copy and leave there, cut, or cut and reference back as embed?		
+		std::string has_to_match_this; // if set, regex with this (DO TRY-CATCH!)
+		bool use_regex = false; // simple find or full regex? true = regex.
+		bool inverse_regex = false; // only works if regex
+		std::vector<unsigned long long> match_ids; // stickers id
+		std::vector<unsigned long long> match_packs_ids; // stickers id
+		std::vector<std::string> react_to_source; // what emojis to react to source (if still exists)
+
+		void from_json(const nlohmann::json&);
+		nlohmann::json to_json() const;
+
+		stickers_configuration() = default;
+		stickers_configuration(const nlohmann::json&);
+	};
+
 	// THESE 3, RESPECT maximum_rules_vector_per_chat_per_type!
-	std::vector<links_configuration> link_configurations; // there can be multiple triggers to same message that could actually copy stuff to many places.
-	std::vector<files_configuration> file_configurations; // there can be multiple triggers to same message that could actually copy stuff to many places.
-	std::vector<texts_configuration> text_configurations; // there can be multiple triggers to same message that could actually copy stuff to many places.
+	std::vector<links_configuration> link_configurations;		 // there can be multiple triggers to same message that could actually copy stuff to many places.
+	std::vector<files_configuration> file_configurations;		 // there can be multiple triggers to same message that could actually copy stuff to many places.
+	std::vector<texts_configuration> text_configurations;		 // there can be multiple triggers to same message that could actually copy stuff to many places.
+	std::vector<stickers_configuration> stickers_configurations; // there can be multiple triggers to same message that could actually copy stuff to many places.
 	std::shared_mutex secure;
 
 	void from_json(const nlohmann::json&);
@@ -237,7 +268,27 @@ class GuildHandle {
 	/// <param name="{std::vector}">SOURCE Emojis.</param>
 	/// <param name="{std::vector}">COPY/DEST Emojis.</param>
 	/// <returns>{std::string} Resulting message.</returns>
-	std::string _command_react(std::unordered_map<size_t, std::string>&, const size_t, std::vector<std::string>&, std::vector<std::string>&);/// <summary>
+	std::string _command_react(std::unordered_map<size_t, std::string>&, const size_t, std::vector<std::string>&, std::vector<std::string>&);
+
+	/// <summary>
+	/// Assist for _command_react
+	/// </summary>
+	/// <param name="{std::unordered_map}">Arguments.</param>
+	/// <param name="{size_t}">Offset (this being one after 'react' word).</param>
+	/// <param name="{std::vector}">Emojis.</param>
+	/// <returns>{std::string} Resulting message.</returns>
+	std::string _command_react_submodule(std::unordered_map<size_t, std::string>&, const size_t, std::vector<std::string>&);
+
+	/// <summary>
+	/// Adapted for _command_react_submodule to stickers ids
+	/// </summary>
+	/// <param name="{std::unordered_map}">Arguments.</param>
+	/// <param name="{size_t}">Offset (this being one after 'react' word).</param>
+	/// <param name="{std::vector}">IDs.</param>
+	/// <returns>{std::string} Resulting message.</returns>
+	std::string _command_snowflake_submodule(std::unordered_map<size_t, std::string>&, const size_t, std::vector<unsigned long long>&);
+
+	/// <summary>
 	/// Assist function for command
 	/// </summary>
 	/// <param name="{std::unordered_map}">Arguments.</param>
@@ -318,4 +369,5 @@ public:
 
 	void handle(aegis::channel&, aegis::gateway::objects::message);
 	void handle(aegis::channel&, const unsigned long long, aegis::gateway::objects::emoji);
+	void handle(aegis::channel&, aegis::gateway::objects::message, const _sticker_addon&);
 };

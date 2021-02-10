@@ -82,10 +82,19 @@ int main() {
 		}
 
 		//obj.msg = result["d"];
+		_sticker_addon sticker;
+		bool has_sticker = false;
+		if (result["d"].count("stickers") && !result["d"]["stickers"].is_null()) {
+			has_sticker = true;
+			sticker.from_json(result["d"]["stickers"]);
+		}
 
 		for (auto& i : guilds) {
 			if (*i == obj.channel.get_guild_id()) {
-				i->handle(obj.channel, obj.msg);
+
+				if (has_sticker) i->handle(obj.channel, obj.msg, sticker); // nowadays it is sticker OR message/attachment.
+				else i->handle(obj.channel, obj.msg);
+
 				return;
 			}
 		}
